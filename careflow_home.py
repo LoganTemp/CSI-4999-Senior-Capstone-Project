@@ -419,6 +419,8 @@ class NewPatientPage(tk.Frame):
         if self.location_combo["values"]:
             self.location_combo.current(0)
 
+        # Go back to Home Page
+        self.controller.show_frame("HomePage")
 
 if __name__ == "__main__":
     app = CareFlowApp()
