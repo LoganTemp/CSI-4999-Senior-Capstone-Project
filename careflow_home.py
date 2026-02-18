@@ -4,8 +4,39 @@ from PIL import Image, ImageTk
 import sqlite3
 import re
 from datetime import datetime
+import os
+import hashlib
 
 DB_NAME = "healthcare.db"
+
+
+# ------------------------ DB migration ------------------------
+def ensure_patient_password_column():
+    """Adds Patient.password_hash if it doesn't exist (safe to run every startup)."""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(Patient)")
+        cols = [row[1] for row in cur.fetchall()]  # row[1] = column name
+
+        if "password_hash" not in cols:
+            cur.execute("ALTER TABLE Patient ADD COLUMN password_hash TEXT")
+            conn.commit()
+
+        conn.close()
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Schema update failed:\n\n{e}")
+
+
+# ------------------------ Password hashing ------------------------
+def hash_password(password: str, iterations: int = 200_000) -> str:
+    """
+    PBKDF2-HMAC-SHA256 hash. Stored as:
+    pbkdf2_sha256$<iterations>$<salt_hex>$<hash_hex>
+    """
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${dk.hex()}"
 
 
 # ------------------------ Validation helpers ------------------------
@@ -42,8 +73,11 @@ class CareFlowApp(tk.Tk):
         super().__init__()
 
         self.title("CareFlow Patient Portal")
-        self.geometry("520x620")
+        self.geometry("520x680")
         self.configure(bg="#f4f7fb")
+
+        # Ensure DB schema is ready BEFORE UI tries to insert new patients
+        ensure_patient_password_column()
 
         self.logo_img = None
         self._load_logo()
@@ -186,7 +220,7 @@ class NewPatientPage(tk.Frame):
 
         tk.Label(
             self,
-            text="Required formats: DOB YYYY-MM-DD • Sex M/F • Phone ###-####",
+            text="Required: DOB YYYY-MM-DD • Sex M/F • Phone ###-#### • Password (min 8 chars)",
             font=("Arial", 10),
             bg="#f4f7fb",
             fg="gray"
@@ -200,12 +234,12 @@ class NewPatientPage(tk.Frame):
 
         self.entries = {}
 
-        def add_row(label, key, row, required=False):
+        def add_row(label, key, row, required=False, is_password=False):
             lbl = f"{label}{' *' if required else ''}"
             tk.Label(form, text=lbl, bg="#f4f7fb", anchor="w").grid(
                 row=row, column=0, sticky="w", padx=10, pady=4
             )
-            e = tk.Entry(form, width=34)
+            e = tk.Entry(form, width=34, show="*" if is_password else "")
             e.grid(row=row, column=1, padx=10, pady=4)
             self.entries[key] = e
 
@@ -218,7 +252,7 @@ class NewPatientPage(tk.Frame):
         add_row("Email", "email", r, required=True); r += 1
         add_row("Address", "address", r, required=True); r += 1
 
-        # ---- Clinic Location dropdown (replaces Location ID entry) ----
+        # ---- Clinic Location dropdown ----
         tk.Label(form, text="Clinic Location *", bg="#f4f7fb", anchor="w").grid(
             row=r, column=0, sticky="w", padx=10, pady=4
         )
@@ -232,7 +266,7 @@ class NewPatientPage(tk.Frame):
         self.location_combo.grid(row=r, column=1, padx=10, pady=4)
         r += 1
 
-        self.location_map = {}  # display_name -> location_id
+        self.location_map = {}
         self._load_locations()
 
         add_row("Allergies (or None)", "allergies", r, required=True); r += 1
@@ -240,6 +274,10 @@ class NewPatientPage(tk.Frame):
         add_row("Medications (or None)", "medications", r, required=True); r += 1
         add_row("Notes", "notes", r, required=False); r += 1
         add_row("Emergency Contact", "emergency_contact", r, required=True); r += 1
+
+        # ---- Password fields ----
+        add_row("Password", "password", r, required=True, is_password=True); r += 1
+        add_row("Confirm Password", "confirm_password", r, required=True, is_password=True); r += 1
 
         btn_row = tk.Frame(content, bg="#f4f7fb")
         btn_row.pack(pady=(12, 0))
@@ -259,7 +297,6 @@ class NewPatientPage(tk.Frame):
         ).pack(side="left", padx=8)
 
     def _load_locations(self):
-        """Load ClinicLocation rows and populate dropdown with friendly names."""
         try:
             conn = sqlite3.connect(DB_NAME)
             cur = conn.cursor()
@@ -274,7 +311,6 @@ class NewPatientPage(tk.Frame):
                 display_names.append(label)
 
             self.location_combo["values"] = display_names
-
             if display_names:
                 self.location_combo.current(0)
             else:
@@ -286,12 +322,10 @@ class NewPatientPage(tk.Frame):
     def save_patient(self):
         data = {k: v.get().strip() for k, v in self.entries.items()}
 
-        # Required fields (excluding location_id because it's now dropdown)
         required_keys = [
-            "first_name", "last_name", "dob", "sex",
-            "phone", "email", "address",
-            "allergies", "conditions", "medications",
-            "emergency_contact"
+            "first_name", "last_name", "dob", "sex", "phone", "email", "address",
+            "allergies", "conditions", "medications", "emergency_contact",
+            "password", "confirm_password"
         ]
         missing = [k for k in required_keys if not data.get(k)]
         if missing:
@@ -299,14 +333,14 @@ class NewPatientPage(tk.Frame):
             messagebox.showerror("Missing Fields", f"Please fill in: {nice}")
             return
 
-        # Location required (dropdown)
+        # Location required
         selected_location = self.location_var.get().strip()
         if not selected_location or selected_location not in self.location_map:
             messagebox.showerror("Missing Clinic Location", "Please select a clinic location.")
             return
         location_id = self.location_map[selected_location]
 
-        # Format enforcement
+        # Formatting
         if not is_valid_date_yyyy_mm_dd(data["dob"]):
             messagebox.showerror("Invalid DOB", "DOB must be YYYY-MM-DD (example: 1990-05-10).")
             return
@@ -325,12 +359,22 @@ class NewPatientPage(tk.Frame):
             messagebox.showerror("Invalid Email", "Please enter a valid email (example: john.doe@email.com).")
             return
 
-        # Normalize optional "None" casing
+        # Password rules
+        if len(data["password"]) < 8:
+            messagebox.showerror("Weak Password", "Password must be at least 8 characters long.")
+            return
+        if data["password"] != data["confirm_password"]:
+            messagebox.showerror("Password Mismatch", "Password and Confirm Password must match.")
+            return
+
+        pw_hash = hash_password(data["password"])
+
+        # Normalize "None"
         for key in ("allergies", "conditions", "medications"):
             if data[key].lower() == "none":
                 data[key] = "None"
 
-        # Insert into DB
+        # Insert into DB (including password_hash)
         try:
             conn = sqlite3.connect(DB_NAME)
             cur = conn.cursor()
@@ -339,8 +383,8 @@ class NewPatientPage(tk.Frame):
                 INSERT INTO Patient (
                     first_name, last_name, dob, sex, phone, email, address,
                     location_id, allergies, conditions, medications,
-                    notes, emergency_contact
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    notes, emergency_contact, password_hash
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 data["first_name"],
                 data["last_name"],
@@ -354,7 +398,8 @@ class NewPatientPage(tk.Frame):
                 data["conditions"],
                 data["medications"],
                 data.get("notes", ""),
-                data["emergency_contact"]
+                data["emergency_contact"],
+                pw_hash
             ))
 
             conn.commit()
@@ -366,15 +411,11 @@ class NewPatientPage(tk.Frame):
 
         messagebox.showinfo("Success", f"Patient added successfully!\nAssigned Location: {selected_location}")
 
-        # Clear form (keep a few helpful defaults)
-        for entry in self.entries.values():
+        # Clear form
+        for key, entry in self.entries.items():
             entry.delete(0, tk.END)
 
-        self.entries["allergies"].insert(0, "None")
-        self.entries["conditions"].insert(0, "None")
-        self.entries["medications"].insert(0, "None")
-
-        # Keep selected location as-is; or reset to first option:
+        # Reset dropdown
         if self.location_combo["values"]:
             self.location_combo.current(0)
 
