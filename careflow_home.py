@@ -73,6 +73,7 @@ class CareFlowApp(tk.Tk):
         super().__init__()
 
         self.title("CareFlow Patient Portal")
+        self.iconbitmap("favicon.ico")
         self.geometry("520x680")
         self.configure(bg="#f4f7fb")
 
