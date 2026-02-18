@@ -9,7 +9,7 @@ import hashlib
 
 DB_NAME = "healthcare.db"
 
-# ---------------- Styling constants (from teammate sandbox) ----------------
+# ---------------- Styling constants  ----------------
 BG_COLOR = "#dddede"
 FG_COLOR = "#222"
 BTN_GREEN = "#4CAF50"
@@ -82,10 +82,11 @@ class CareFlowApp(tk.Tk):
         super().__init__()
 
         self.title("CareFlow Patient Portal")
+        self.iconbitmap("favicon.ico")
         self.geometry("520x680")
         self.configure(bg=BG_COLOR)
 
-        # Try setting icon (won't crash if missing/bad .ico)
+        # Try setting icon
         try:
             if os.path.exists("logo.ico"):
                 self.iconbitmap("logo.ico")
@@ -114,7 +115,7 @@ class CareFlowApp(tk.Tk):
     def _load_logo(self):
         try:
             img = Image.open("logo.png").convert("RGBA")
-            img = img.resize((180, 180))
+            img = img.resize((250, 250))
             self.logo_img = ImageTk.PhotoImage(img)
         except Exception as e:
             self.logo_img = None
@@ -124,7 +125,7 @@ class CareFlowApp(tk.Tk):
         self.frames[page_name].tkraise()
 
 
-# ---------------- HOME PAGE (styled like teammate sandbox) ----------------
+# ---------------- HOME PAGE ----------------
 class HomePage(tk.Frame):
     def __init__(self, parent, controller: CareFlowApp):
         super().__init__(parent, bg=BG_COLOR)
@@ -135,7 +136,7 @@ class HomePage(tk.Frame):
         self.content.pack(expand=True, fill="both")
 
         # Gradient header behind logo
-        self.logo_canvas_height = 160
+        self.logo_canvas_height = 180
         self.logo_canvas = tk.Canvas(self.content, height=self.logo_canvas_height, highlightthickness=0, bd=0)
         self.logo_canvas.pack(fill="x", pady=(10, 10))
 
