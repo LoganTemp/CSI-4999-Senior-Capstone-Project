@@ -88,8 +88,8 @@ class CareFlowApp(tk.Tk):
 
         # Try setting icon
         try:
-            if os.path.exists("logo.ico"):
-                self.iconbitmap("logo.ico")
+            if os.path.exists("favicon.ico"):
+                self.iconbitmap("favicon.ico")
         except Exception:
             pass
 
