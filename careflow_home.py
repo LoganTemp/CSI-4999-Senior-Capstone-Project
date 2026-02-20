@@ -588,7 +588,8 @@ class NewStaffPage(tk.Frame):
 
         add_row("Password", "password", r, required=True, is_password=True); r += 1
         add_row("Confirm Password", "confirm_password", r, required=True, is_password=True); r += 1
-
+        add_row("Staff Confirmation Code", "confirmation_code", r, required=True, is_password=True); r += 1
+        
         btn_row = tk.Frame(content, bg=BG_COLOR)
         btn_row.pack(pady=(10, 0))
 
@@ -634,6 +635,9 @@ class NewStaffPage(tk.Frame):
             return
         if data["password"] != data["confirm_password"]:
             messagebox.showerror("Password Mismatch", "Password and Confirm Password must match.")
+            return
+        if data.get("confirmation_code") != "1234":
+            messagebox.showerror("Invalid Code", "Invalid staff confirmation code.")
             return
 
         pw_hash = hash_password(data["password"])
