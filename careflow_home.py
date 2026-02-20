@@ -35,7 +35,22 @@ def ensure_patient_password_column():
             conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        messagebox.showerror("Database Error", f"Schema update failed:\n\n{e}")
+        messagebox.showerror("Database Error", f"Patient schema update failed:\n\n{e}")
+
+
+def ensure_staff_password_column():
+    """Adds Staff.password_hash if it doesn't exist (safe to run every startup)."""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(Staff)")
+        cols = [row[1] for row in cur.fetchall()]
+        if "password_hash" not in cols:
+            cur.execute("ALTER TABLE Staff ADD COLUMN password_hash TEXT")
+            conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Staff schema update failed:\n\n{e}")
 
 
 # ------------------------ Password hashing ------------------------
@@ -82,7 +97,6 @@ class CareFlowApp(tk.Tk):
         super().__init__()
 
         self.title("CareFlow Patient Portal")
-        self.iconbitmap("favicon.ico")
         self.geometry("520x680")
         self.configure(bg=BG_COLOR)
 
@@ -93,8 +107,9 @@ class CareFlowApp(tk.Tk):
         except Exception:
             pass
 
-        # Ensure DB schema is ready BEFORE UI tries to insert new patients
+        # Ensure DB schema is ready BEFORE UI tries to insert
         ensure_patient_password_column()
+        ensure_staff_password_column()
 
         self.logo_img = None
         self._load_logo()
@@ -105,7 +120,7 @@ class CareFlowApp(tk.Tk):
         container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
-        for F in (HomePage, PatientMenuPage, NewPatientPage):
+        for F in (HomePage, PatientMenuPage, NewPatientPage, StaffMenuPage, NewStaffPage):
             frame = F(parent=container, controller=self)
             self.frames[F.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
@@ -177,8 +192,11 @@ class HomePage(tk.Frame):
         # Title/subtitle
         tk.Label(self.content, text="Welcome to CareFlow", font=FONT_LARGE, bg=BG_COLOR, fg=FG_COLOR).pack()
         tk.Label(self.content, text="Health Management Systems", font=FONT_MEDIUM, bg=BG_COLOR, fg=FG_COLOR).pack()
-        tk.Label(self.content, text="Your secure medical documentation portal", font=FONT_SMALL,
-                 bg=BG_COLOR, fg="gray").pack(pady=(6, 22))
+        tk.Label(
+            self.content,
+            text="Your secure medical documentation portal",
+            font=FONT_SMALL, bg=BG_COLOR, fg="gray"
+        ).pack(pady=(6, 22))
 
         # Buttons (responsive)
         self.button_frame = tk.Frame(self.content, bg=BG_COLOR)
@@ -194,8 +212,9 @@ class HomePage(tk.Frame):
             self.button_frame, text="Provider",
             font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
             width=18, height=2, relief="flat",
-            command=lambda: messagebox.showinfo("Provider", "Provider login screen coming soon")
+            command=lambda: controller.show_frame("StaffMenuPage")
         )
+
         self.buttons = [self.patient_btn, self.staff_btn]
         for btn in self.buttons:
             btn.pack(side=tk.TOP, pady=5)
@@ -223,8 +242,10 @@ class HomePage(tk.Frame):
                 command=lambda t=text: messagebox.showinfo(t, f"{t} clicked (hook later)")
             ).pack(side=tk.LEFT, expand=True)
 
-        tk.Label(self.content, text="Created by the CareFlow Team, 2026",
-                 font=FONT_SMALL, bg=BG_COLOR, fg="gray").pack(pady=(6, 22))
+        tk.Label(
+            self.content, text="Created by the CareFlow Team, 2026",
+            font=FONT_SMALL, bg=BG_COLOR, fg="gray"
+        ).pack(pady=(6, 22))
 
         # Responsive behavior
         self.bind("<Configure>", self.adjust_buttons)
@@ -287,6 +308,39 @@ class PatientMenuPage(tk.Frame):
         ).pack(pady=(26, 0))
 
 
+# ---------------- STAFF MENU ----------------
+class StaffMenuPage(tk.Frame):
+    def __init__(self, parent, controller: CareFlowApp):
+        super().__init__(parent, bg=BG_COLOR)
+
+        content = tk.Frame(self, bg=BG_COLOR)
+        content.pack(expand=True)
+
+        tk.Label(content, text="Provider Portal", font=FONT_LARGE, bg=BG_COLOR, fg=FG_COLOR).pack(pady=(10, 10))
+        tk.Label(content, text="Please choose an option:", font=FONT_SMALL, bg=BG_COLOR, fg="gray").pack(pady=(0, 24))
+
+        tk.Button(
+            content, text="Existing Staff",
+            font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
+            width=18, height=2, relief="flat",
+            command=lambda: messagebox.showinfo("Existing Staff", "Existing staff login screen coming soon")
+        ).pack(pady=10)
+
+        tk.Button(
+            content, text="New Staff",
+            font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
+            width=18, height=2, relief="flat",
+            command=lambda: controller.show_frame("NewStaffPage")
+        ).pack(pady=10)
+
+        tk.Button(
+            content, text="Back",
+            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
+            width=18, height=2, relief="flat",
+            command=lambda: controller.show_frame("HomePage")
+        ).pack(pady=(26, 0))
+
+
 # ---------------- NEW PATIENT PAGE ----------------
 class NewPatientPage(tk.Frame):
     def __init__(self, parent, controller: CareFlowApp):
@@ -328,7 +382,6 @@ class NewPatientPage(tk.Frame):
         add_row("Email", "email", r, required=True); r += 1
         add_row("Address", "address", r, required=True); r += 1
 
-        # Clinic Location dropdown
         tk.Label(form, text="Clinic Location *", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
             row=r, column=0, sticky="w", padx=10, pady=5
         )
@@ -470,12 +523,150 @@ class NewPatientPage(tk.Frame):
             messagebox.showerror("Database Error", f"Could not add patient.\n\n{e}")
             return
 
-        messagebox.showinfo("Success", f"Patient added successfully!\nAssigned Location: {selected_location}")
-
+        messagebox.showinfo("Success", "Patient added successfully!")
         for entry in self.entries.values():
             entry.delete(0, tk.END)
         if self.location_combo["values"]:
             self.location_combo.current(0)
+
+        self.controller.show_frame("HomePage")
+
+
+# ---------------- NEW STAFF PAGE ----------------
+class NewStaffPage(tk.Frame):
+    def __init__(self, parent, controller: CareFlowApp):
+        super().__init__(parent, bg=BG_COLOR)
+        self.controller = controller
+
+        tk.Label(self, text="New Staff Registration", font=("Arial", 18, "bold"),
+                 bg=BG_COLOR, fg=FG_COLOR).pack(pady=(10, 2))
+
+        tk.Label(self, text="Required: Email • Phone ###-#### • Role • Password (min 8 chars)",
+                 font=("Arial", 10), bg=BG_COLOR, fg="gray").pack(pady=(0, 10))
+
+        content = tk.Frame(self, bg=BG_COLOR)
+        content.pack(expand=True)
+
+        form_wrap = tk.Frame(content, bg=CONTAINER_COLOR)
+        form_wrap.pack(padx=20, pady=10)
+
+        form = tk.Frame(form_wrap, bg=CONTAINER_COLOR)
+        form.pack(padx=14, pady=14)
+
+        self.entries = {}
+
+        def add_row(label, key, row, required=False, is_password=False):
+            lbl = f"{label}{' *' if required else ''}"
+            tk.Label(form, text=lbl, bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
+                row=row, column=0, sticky="w", padx=10, pady=5
+            )
+            e = tk.Entry(form, width=34, show="*" if is_password else "")
+            e.grid(row=row, column=1, padx=10, pady=5)
+            self.entries[key] = e
+
+        r = 0
+        add_row("First Name", "first_name", r, required=True); r += 1
+        add_row("Last Name", "last_name", r, required=True); r += 1
+        add_row("Email", "email", r, required=True); r += 1
+        add_row("Phone (###-####)", "phone", r, required=True); r += 1
+
+        # Role dropdown
+        tk.Label(form, text="Role *", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
+            row=r, column=0, sticky="w", padx=10, pady=5
+        )
+        self.role_var = tk.StringVar()
+        self.role_combo = ttk.Combobox(
+            form,
+            textvariable=self.role_var,
+            width=32,
+            state="readonly",
+            values=["doctor", "billing", "records", "nurse"]
+        )
+        self.role_combo.grid(row=r, column=1, padx=10, pady=5)
+        self.role_combo.current(0)
+        r += 1
+
+        add_row("Password", "password", r, required=True, is_password=True); r += 1
+        add_row("Confirm Password", "confirm_password", r, required=True, is_password=True); r += 1
+
+        btn_row = tk.Frame(content, bg=BG_COLOR)
+        btn_row.pack(pady=(10, 0))
+
+        tk.Button(
+            btn_row, text="Submit",
+            font=FONT_SMALL, bg=BTN_BLUE, fg="white",
+            width=14, height=2, relief="flat",
+            command=self.save_staff
+        ).pack(side="left", padx=8)
+
+        tk.Button(
+            btn_row, text="Back",
+            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
+            width=14, height=2, relief="flat",
+            command=lambda: controller.show_frame("StaffMenuPage")
+        ).pack(side="left", padx=8)
+
+    def save_staff(self):
+        data = {k: v.get().strip() for k, v in self.entries.items()}
+        role = (self.role_var.get() or "").strip()
+
+        required_keys = ["first_name", "last_name", "email", "phone", "password", "confirm_password"]
+        missing = [k for k in required_keys if not data.get(k)]
+        if missing or not role:
+            msg_parts = []
+            if missing:
+                msg_parts.append("Missing: " + ", ".join(m.replace("_", " ") for m in missing))
+            if not role:
+                msg_parts.append("Please select a role.")
+            messagebox.showerror("Missing Fields", "\n".join(msg_parts))
+            return
+
+        if not is_valid_email_basic(data["email"]):
+            messagebox.showerror("Invalid Email", "Please enter a valid email (example: alice@clinic.com).")
+            return
+
+        if not is_valid_phone_555_format(data["phone"]):
+            messagebox.showerror("Invalid Phone", "Phone must be ###-#### (example: 555-5555).")
+            return
+
+        if len(data["password"]) < 8:
+            messagebox.showerror("Weak Password", "Password must be at least 8 characters long.")
+            return
+        if data["password"] != data["confirm_password"]:
+            messagebox.showerror("Password Mismatch", "Password and Confirm Password must match.")
+            return
+
+        pw_hash = hash_password(data["password"])
+
+        # Insert into Staff
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            cur = conn.cursor()
+
+            # Keep active_flag = 1 by default
+            cur.execute("""
+                INSERT INTO Staff (first_name, last_name, email, phone, role, active_flag, password_hash)
+                VALUES (?, ?, ?, ?, ?, 1, ?)
+            """, (
+                data["first_name"],
+                data["last_name"],
+                data["email"],
+                data["phone"],
+                role,
+                pw_hash
+            ))
+
+            conn.commit()
+            conn.close()
+
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Could not add staff.\n\n{e}")
+            return
+
+        messagebox.showinfo("Success", "Staff member added successfully!")
+        for entry in self.entries.values():
+            entry.delete(0, tk.END)
+        self.role_combo.current(0)
 
         self.controller.show_frame("HomePage")
 
