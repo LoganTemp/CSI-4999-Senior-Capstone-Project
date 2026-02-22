@@ -90,6 +90,137 @@ def is_valid_email_basic(s: str) -> bool:
     s = (s or "").strip()
     return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", s))
 
+# ------------------------ Clinic Location DB helpers ------------------------
+def get_all_active_clinics():
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT location_id, name, city, state
+            FROM ClinicLocation
+            WHERE status = 'active'
+        """)
+
+        results = cur.fetchall()
+        conn.close()
+        return results
+
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Failed to fetch clinics:\n\n{e}")
+        return []
+    
+    
+def add_clinic_location(name, address, city, state, zip_code, phone):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO ClinicLocation (name, address, city, state, zip, phone, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'active')
+        """, (name, address, city, state, zip_code, phone))
+
+        conn.commit()
+        conn.close()
+        return True
+
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Failed to add clinic:\n\n{e}")
+        return False
+    
+    
+def remove_clinic_location(location_id):
+    """
+    Soft delete a clinic by setting status = 'inactive'.
+    Returns True if successful, False if error.
+    """
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        cur.execute("""
+            UPDATE ClinicLocation
+            SET status = 'inactive'
+            WHERE location_id = ?
+        """, (location_id,))
+
+        conn.commit()
+        conn.close()
+        return True
+
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Failed to remove clinic:\n\n{e}")
+        return False
+    
+    
+def update_clinic_location(location_id, name=None, address=None, city=None, state=None, zip_code=None, phone=None):
+    """
+    Update clinic fields. Only updates the fields that are not None.
+    Returns True if successful, False if error.
+    """
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        # Build the SET clause dynamically
+        fields = []
+        values = []
+
+        if name is not None:
+            fields.append("name = ?")
+            values.append(name)
+        if address is not None:
+            fields.append("address = ?")
+            values.append(address)
+        if city is not None:
+            fields.append("city = ?")
+            values.append(city)
+        if state is not None:
+            fields.append("state = ?")
+            values.append(state)
+        if zip_code is not None:
+            fields.append("zip = ?")
+            values.append(zip_code)
+        if phone is not None:
+            fields.append("phone = ?")
+            values.append(phone)
+
+        if not fields:
+            # Nothing to update
+            conn.close()
+            return False
+
+        values.append(location_id)
+        sql = f"UPDATE ClinicLocation SET {', '.join(fields)} WHERE location_id = ?"
+        cur.execute(sql, values)
+        conn.commit()
+        conn.close()
+        return True
+
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Failed to update clinic:\n\n{e}")
+        return False   
+    
+    
+def soft_delete_clinic_location(clinic_id):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        cur.execute("""
+            UPDATE ClinicLocation
+            SET status = 'inactive'
+            WHERE location_id = ?
+        """, (clinic_id,))
+
+        conn.commit()
+        conn.close()
+        return True
+
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Failed to delete clinic:\n\n{e}")
+        return False
 
 # ------------------------ App ------------------------
 class CareFlowApp(tk.Tk):
@@ -120,7 +251,7 @@ class CareFlowApp(tk.Tk):
         container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
-        for F in (HomePage, PatientMenuPage, NewPatientPage, StaffMenuPage, NewStaffPage):
+        for F in (HomePage, PatientMenuPage, NewPatientPage, LocationMenuPage, StaffMenuPage, NewStaffPage):
             frame = F(parent=container, controller=self)
             self.frames[F.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
@@ -208,6 +339,14 @@ class HomePage(tk.Frame):
             width=18, height=2, relief="flat",
             command=lambda: controller.show_frame("PatientMenuPage")
         )
+        self.clinic_btn = tk.Button(
+            self.button_frame, text="Clinic Locations",
+            font=FONT_MEDIUM, bg=BTN_GRAY, fg="black",
+            width=18, height=2, relief="flat",
+            command=lambda: controller.show_frame("LocationMenuPage")
+        )
+        self.clinic_btn.pack(side=tk.TOP, pady=5)
+        
         self.staff_btn = tk.Button(
             self.button_frame, text="Provider",
             font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
@@ -531,7 +670,214 @@ class NewPatientPage(tk.Frame):
 
         self.controller.show_frame("HomePage")
 
+# ---------------- CLINIC LOCATION PAGE ----------------
+class LocationMenuPage(tk.Frame):
+    def __init__(self, parent, controller: CareFlowApp):
+        super().__init__(parent, bg=BG_COLOR)
+        self.controller = controller
 
+        self.content = tk.Frame(self, bg=BG_COLOR)
+        self.content.pack(fill="both", expand=True, padx=20, pady=20)
+
+        tk.Label(self.content, text="Clinic Locations", font=FONT_LARGE, bg=BG_COLOR, fg=FG_COLOR).pack(pady=(0, 10))
+
+        # Treeview to show clinics
+        columns = ("ID", "Name", "City", "State")
+        self.tree = ttk.Treeview(self.content, columns=columns, show="headings", height=15)
+        for col in columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=150)
+        self.tree.pack(pady=10)
+
+        # Refresh button
+        tk.Button(
+            self.content,
+            text="Refresh List",
+            font=FONT_MEDIUM,
+            bg=BTN_BLUE,
+            fg="white",
+            width=15,
+            command=self.refresh_clinics
+        ).pack(pady=5)
+
+        # Button frame
+        self.button_frame = tk.Frame(self.content, bg=BG_COLOR)
+        self.button_frame.pack(pady=10)
+
+        # Add, Update, Delete buttons
+        tk.Button(
+            self.button_frame, text="Add Clinic",
+            font=FONT_SMALL, bg=BTN_GREEN, fg="white",
+            width=12,
+            command=self.add_clinic_dialog
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            self.button_frame, text="Update Clinic",
+            font=FONT_SMALL, bg="#FFA500", fg="white",
+            width=12,
+            command=self.update_clinic_dialog
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            self.button_frame, text="Delete Clinic",
+            font=FONT_SMALL, bg="#F44336", fg="white",
+            width=12,
+            command=self.delete_clinic_dialog
+        ).pack(side=tk.LEFT, padx=5)
+
+        # Load clinics initially
+        self.refresh_clinics()
+
+    # ------------------- REFRESH -------------------
+    def refresh_clinics(self):
+        # Clear current rows
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+
+        # Load from DB
+        clinics = get_all_active_clinics()
+        print("DEBUG: clinics loaded:", clinics)  # optional debug
+        for c in clinics:
+            self.tree.insert("", "end", values=c)
+
+    # ------------------- ADD -------------------
+    def add_clinic_dialog(self):
+        win = tk.Toplevel(self)
+        win.title("Add Clinic")
+        win.geometry("400x350")
+        win.configure(bg=BG_COLOR)
+
+        entries = {}
+        fields = [("Name", ""), ("Address", ""), ("City", ""), ("State", ""), ("ZIP", ""), ("Phone", "")]
+        for idx, (label_text, default) in enumerate(fields):
+            tk.Label(win, text=label_text, bg=BG_COLOR, font=FONT_SMALL).grid(row=idx, column=0, sticky="w", padx=10, pady=5)
+            ent = tk.Entry(win, width=30)
+            ent.insert(0, default)
+            ent.grid(row=idx, column=1, padx=10, pady=5)
+            entries[label_text.lower()] = ent
+
+        def submit():
+            new_name = entries["name"].get().strip()
+            new_address = entries["address"].get().strip()
+            new_city = entries["city"].get().strip()
+            new_state = entries["state"].get().strip()
+            new_zip = entries["zip"].get().strip()
+            new_phone = entries["phone"].get().strip()
+
+            if not new_name or not new_address or not new_city or not new_state or not new_zip:
+                messagebox.showwarning("Input Error", "Name, Address, City, State, and ZIP are required.")
+                return
+
+            success = add_clinic_location(new_name, new_address, new_city, new_state, new_zip, new_phone)
+            if success:
+                win.destroy()             # close popup first
+                self.refresh_clinics()    # refresh table
+                messagebox.showinfo("Success", f"Clinic '{new_name}' added successfully!")
+            else:
+                messagebox.showerror("Error", "Failed to add clinic.")
+
+        tk.Button(win, text="Add Clinic", bg=BTN_GREEN, fg="white", width=15, command=submit).grid(
+            row=len(fields), column=0, columnspan=2, pady=15
+        )
+
+    # ------------------- UPDATE -------------------
+    def update_clinic_dialog(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Select Clinic", "Please select a clinic to update.")
+            return
+
+        # Get all current values from the selected row
+        clinic_id = self.tree.item(selected[0])["values"][0]
+
+        # Fetch the full clinic record from DB to pre-fill all fields
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT name, address, city, state, zip, phone
+            FROM ClinicLocation
+            WHERE location_id = ?
+        """, (clinic_id,))
+        row = cur.fetchone()
+        conn.close()
+
+        if not row:
+            messagebox.showerror("Error", "Failed to fetch clinic info.")
+            return
+
+        name, address, city, state, zip_code, phone = row
+
+        # Popup window
+        win = tk.Toplevel(self)
+        win.title("Update Clinic")
+        win.geometry("400x350")
+        win.configure(bg=BG_COLOR)
+
+        entries = {}
+        fields = [("Name", name), ("Address", address), ("City", city), ("State", state), ("ZIP", zip_code), ("Phone", phone)]
+        for idx, (label_text, default) in enumerate(fields):
+            tk.Label(win, text=label_text, bg=BG_COLOR, font=FONT_SMALL).grid(row=idx, column=0, sticky="w", padx=10, pady=5)
+            ent = tk.Entry(win, width=30)
+            ent.insert(0, default)
+            ent.grid(row=idx, column=1, padx=10, pady=5)
+            entries[label_text.lower()] = ent
+
+        # Submit function
+        def submit():
+            new_name = entries["name"].get().strip()
+            new_address = entries["address"].get().strip()
+            new_city = entries["city"].get().strip()
+            new_state = entries["state"].get().strip()
+            new_zip = entries["zip"].get().strip()
+            new_phone = entries["phone"].get().strip()
+
+            if not new_name or not new_address or not new_city or not new_state or not new_zip:
+                messagebox.showwarning("Input Error", "Name, Address, City, State, and ZIP are required.")
+                return
+
+            success = update_clinic_location(
+                location_id=clinic_id,
+                name=new_name,
+                address=new_address,
+                city=new_city,
+                state=new_state,
+                zip_code=new_zip,
+                phone=new_phone
+            )
+            if success:
+                win.destroy()             # close popup first
+                self.refresh_clinics()    # refresh table
+                messagebox.showinfo("Success", f"Clinic '{new_name}' updated successfully!")
+            else:
+                messagebox.showerror("Error", "Failed to update clinic.")
+
+        tk.Button(win, text="Save Changes", bg=BTN_BLUE, fg="white", width=15, command=submit).grid(
+            row=len(fields), column=0, columnspan=2, pady=15
+        )
+
+    # ------------------- DELETE -------------------
+    def delete_clinic_dialog(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Select Clinic", "Please select a clinic to delete.")
+            return
+
+        # Get clinic ID and Name from the selected row
+        clinic_id, name = self.tree.item(selected[0])["values"][0:2]
+
+        # Confirm deletion
+        if not messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{name}'?"):
+            return
+
+        # Call DB helper
+        success = soft_delete_clinic_location(clinic_id)
+        if success:
+            self.refresh_clinics()  # Refresh table immediately
+            messagebox.showinfo("Deleted", f"Clinic '{name}' was deleted.")
+        else:
+            messagebox.showerror("Error", "Failed to delete clinic.")
+        
 # ---------------- NEW STAFF PAGE ----------------
 class NewStaffPage(tk.Frame):
     def __init__(self, parent, controller: CareFlowApp):
