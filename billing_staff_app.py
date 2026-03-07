@@ -22,11 +22,9 @@ def is_valid_date_yyyy_mm_dd(s: str) -> bool:
         return False
 
 
-class BillingStaffApp(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("CareFlow - Staff Billing (Create Bill)")
-        self.geometry("760x520")
+class BillingFrame(tk.Frame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
         self.conn = None
         self.patient_map = {}   # display -> patient_id
@@ -296,7 +294,15 @@ class BillingStaffApp(tk.Tk):
             self.destroy()
 
 
+class BillingStaffApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("CareFlow - Staff Billing (Create Bill)")
+        self.geometry("760x520")
+        frame = BillingFrame(self)
+        frame.pack(fill="both", expand=True)
+
+
 if __name__ == "__main__":
     app = BillingStaffApp()
-    app.protocol("WM_DELETE_WINDOW", app.on_close)
     app.mainloop()
