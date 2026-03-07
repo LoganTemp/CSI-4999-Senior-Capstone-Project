@@ -8,6 +8,7 @@ import os
 import hashlib
 from records import RecordsFrame
 from billing_staff_app import BillingFrame
+from billing_patient_app import BillingPatientFrame
 
 DB_NAME = "healthcare.db"
 
@@ -253,7 +254,7 @@ class CareFlowApp(tk.Tk):
         container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
-        for F in (HomePage, PatientMenuPage, NewPatientPage, LocationMenuPage, StaffMenuPage, NewStaffPage, MedicalRecordsPage, BillingPage):
+        for F in (HomePage, PatientMenuPage, NewPatientPage, LocationMenuPage, StaffMenuPage, NewStaffPage, MedicalRecordsPage, BillingMenuPage, BillingPage, PatientBillingPage):
             frame = F(parent=container, controller=self)
             self.frames[F.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
@@ -358,10 +359,10 @@ class HomePage(tk.Frame):
         self.records_btn.pack(side=tk.TOP, pady=5)
 
         self.billing_btn = tk.Button(
-            self.button_frame, text="Staff Billing",
+            self.button_frame, text="Billing",
             font=FONT_MEDIUM, bg="#00897B", fg="white",
             width=18, height=2, relief="flat",
-            command=lambda: controller.show_frame("BillingPage")
+            command=lambda: controller.show_frame("BillingMenuPage")
         )
         self.billing_btn.pack(side=tk.TOP, pady=5)
 
@@ -1068,6 +1069,39 @@ class MedicalRecordsPage(tk.Frame):
         records_frame.pack(fill="both", expand=True)
 
 
+# ---------------- BILLING MENU ----------------
+class BillingMenuPage(tk.Frame):
+    def __init__(self, parent, controller: CareFlowApp):
+        super().__init__(parent, bg=BG_COLOR)
+
+        content = tk.Frame(self, bg=BG_COLOR)
+        content.pack(expand=True)
+
+        tk.Label(content, text="Billing", font=FONT_LARGE, bg=BG_COLOR, fg=FG_COLOR).pack(pady=(10, 10))
+        tk.Label(content, text="Please choose an option:", font=FONT_SMALL, bg=BG_COLOR, fg="gray").pack(pady=(0, 24))
+
+        tk.Button(
+            content, text="Patient Billing",
+            font=FONT_MEDIUM, bg="#00897B", fg="white",
+            width=18, height=2, relief="flat",
+            command=lambda: controller.show_frame("PatientBillingPage")
+        ).pack(pady=10)
+
+        tk.Button(
+            content, text="Staff Billing",
+            font=FONT_MEDIUM, bg="#00897B", fg="white",
+            width=18, height=2, relief="flat",
+            command=lambda: controller.show_frame("BillingPage")
+        ).pack(pady=10)
+
+        tk.Button(
+            content, text="Back",
+            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
+            width=18, height=2, relief="flat",
+            command=lambda: controller.show_frame("HomePage")
+        ).pack(pady=(26, 0))
+
+
 # ---------------- BILLING PAGE ----------------
 class BillingPage(tk.Frame):
     def __init__(self, parent, controller: CareFlowApp):
@@ -1083,11 +1117,33 @@ class BillingPage(tk.Frame):
             header, text="Back",
             font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
             width=10, height=1, relief="flat",
-            command=lambda: controller.show_frame("HomePage")
+            command=lambda: controller.show_frame("BillingMenuPage")
         ).pack(side="right")
 
         billing_frame = BillingFrame(self)
         billing_frame.pack(fill="both", expand=True)
+
+
+# ---------------- PATIENT BILLING PAGE ----------------
+class PatientBillingPage(tk.Frame):
+    def __init__(self, parent, controller: CareFlowApp):
+        super().__init__(parent, bg=BG_COLOR)
+        self.controller = controller
+
+        header = tk.Frame(self, bg=BG_COLOR)
+        header.pack(fill="x", padx=12, pady=(10, 0))
+
+        tk.Label(header, text="Patient Billing", font=FONT_LARGE, bg=BG_COLOR, fg=FG_COLOR).pack(side="left")
+
+        tk.Button(
+            header, text="Back",
+            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
+            width=10, height=1, relief="flat",
+            command=lambda: controller.show_frame("BillingMenuPage")
+        ).pack(side="right")
+
+        patient_billing_frame = BillingPatientFrame(self)
+        patient_billing_frame.pack(fill="both", expand=True)
 
 
 if __name__ == "__main__":
