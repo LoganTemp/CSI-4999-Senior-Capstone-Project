@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 import os
 import hashlib
-from records import RecordSystem
+from records import RecordsFrame
 
 DB_NAME = "healthcare.db"
 
@@ -252,7 +252,7 @@ class CareFlowApp(tk.Tk):
         container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
-        for F in (HomePage, PatientMenuPage, NewPatientPage, LocationMenuPage, StaffMenuPage, NewStaffPage):
+        for F in (HomePage, PatientMenuPage, NewPatientPage, LocationMenuPage, StaffMenuPage, NewStaffPage, MedicalRecordsPage):
             frame = F(parent=container, controller=self)
             self.frames[F.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
@@ -342,12 +342,20 @@ class HomePage(tk.Frame):
         )
         self.clinic_btn = tk.Button(
             self.button_frame, text="Clinic Locations",
-            font=FONT_MEDIUM, bg=BTN_GRAY, fg="black",
+            font=FONT_MEDIUM, bg="#FF9800", fg="white",
             width=18, height=2, relief="flat",
             command=lambda: controller.show_frame("LocationMenuPage")
         )
         self.clinic_btn.pack(side=tk.TOP, pady=5)
-        
+
+        self.records_btn = tk.Button(
+            self.button_frame, text="Medical Records",
+            font=FONT_MEDIUM, bg="#9C27B0", fg="white",
+            width=18, height=2, relief="flat",
+            command=lambda: controller.show_frame("MedicalRecordsPage")
+        )
+        self.records_btn.pack(side=tk.TOP, pady=5)
+
         self.staff_btn = tk.Button(
             self.button_frame, text="Provider",
             font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
@@ -471,13 +479,6 @@ class StaffMenuPage(tk.Frame):
             font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
             width=18, height=2, relief="flat",
             command=lambda: controller.show_frame("NewStaffPage")
-        ).pack(pady=10)
-
-        tk.Button(
-            content, text="Medical Records",
-            font=FONT_MEDIUM, bg="#9C27B0", fg="white",
-            width=18, height=2, relief="flat",
-            command=lambda: RecordSystem(controller)
         ).pack(pady=10)
 
         tk.Button(
@@ -734,6 +735,13 @@ class LocationMenuPage(tk.Frame):
             command=self.delete_clinic_dialog
         ).pack(side=tk.LEFT, padx=5)
 
+        tk.Button(
+            self.content, text="Back",
+            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
+            width=14, height=2, relief="flat",
+            command=lambda: controller.show_frame("HomePage")
+        ).pack(pady=(10, 0))
+
         # Load clinics initially
         self.refresh_clinics()
 
@@ -885,7 +893,7 @@ class LocationMenuPage(tk.Frame):
             messagebox.showinfo("Deleted", f"Clinic '{name}' was deleted.")
         else:
             messagebox.showerror("Error", "Failed to delete clinic.")
-        
+
 # ---------------- NEW STAFF PAGE ----------------
 class NewStaffPage(tk.Frame):
     def __init__(self, parent, controller: CareFlowApp):
@@ -1027,6 +1035,28 @@ class NewStaffPage(tk.Frame):
         self.role_combo.current(0)
 
         self.controller.show_frame("HomePage")
+
+
+# ---------------- MEDICAL RECORDS PAGE ----------------
+class MedicalRecordsPage(tk.Frame):
+    def __init__(self, parent, controller: CareFlowApp):
+        super().__init__(parent, bg=BG_COLOR)
+        self.controller = controller
+
+        header = tk.Frame(self, bg=BG_COLOR)
+        header.pack(fill="x", padx=12, pady=(10, 0))
+
+        tk.Label(header, text="Medical Records", font=FONT_LARGE, bg=BG_COLOR, fg=FG_COLOR).pack(side="left")
+
+        tk.Button(
+            header, text="Back",
+            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
+            width=10, height=1, relief="flat",
+            command=lambda: controller.show_frame("HomePage")
+        ).pack(side="right")
+
+        records_frame = RecordsFrame(self)
+        records_frame.pack(fill="both", expand=True)
 
 
 if __name__ == "__main__":

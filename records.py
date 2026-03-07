@@ -101,11 +101,9 @@ def unique_dest_path(dest_dir: str, filename: str) -> Tuple[str, str]:
 # ==============================
 # UI App
 # ==============================
-class RecordSystem(tk.Toplevel):
+class RecordsFrame(tk.Frame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.title("CareFlow - Medical Records")
-        self.geometry("780x520")
 
         ensure_records_table_exists()
 
@@ -352,6 +350,15 @@ class RecordSystem(tk.Toplevel):
 
         except Exception as e:
             messagebox.showerror("Error", str(e))
+
+
+class RecordSystem(tk.Toplevel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.title("CareFlow - Medical Records")
+        self.geometry("780x520")
+        frame = RecordsFrame(self)
+        frame.pack(fill="both", expand=True)
 
 
 if __name__ == "__main__":
