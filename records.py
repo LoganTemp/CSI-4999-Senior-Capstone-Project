@@ -101,9 +101,9 @@ def unique_dest_path(dest_dir: str, filename: str) -> Tuple[str, str]:
 # ==============================
 # UI App
 # ==============================
-class RecordSystem(tk.Tk):
-    def __init__(self):
-        super().__init__()
+class RecordSystem(tk.Toplevel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.title("CareFlow - Medical Records")
         self.geometry("780x520")
 
@@ -355,5 +355,7 @@ class RecordSystem(tk.Tk):
 
 
 if __name__ == "__main__":
-    app = RecordSystem()
+    root = tk.Tk()
+    root.withdraw()
+    app = RecordSystem(parent=root)
     app.mainloop()

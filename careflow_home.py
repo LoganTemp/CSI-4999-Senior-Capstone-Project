@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 import os
 import hashlib
+from records import RecordSystem
 
 DB_NAME = "healthcare.db"
 
@@ -470,6 +471,13 @@ class StaffMenuPage(tk.Frame):
             font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
             width=18, height=2, relief="flat",
             command=lambda: controller.show_frame("NewStaffPage")
+        ).pack(pady=10)
+
+        tk.Button(
+            content, text="Medical Records",
+            font=FONT_MEDIUM, bg="#9C27B0", fg="white",
+            width=18, height=2, relief="flat",
+            command=lambda: RecordSystem(controller)
         ).pack(pady=10)
 
         tk.Button(
