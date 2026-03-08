@@ -334,18 +334,18 @@ class HomePage(tk.Frame):
 
         # Buttons (responsive)
         self.button_frame = tk.Frame(self.content, bg=BG_COLOR)
-        self.button_frame.pack(pady=20)
+        self.button_frame.pack(pady=20, fill="x")
 
         self.patient_btn = tk.Button(
             self.button_frame, text="Patient",
             font=FONT_MEDIUM, bg=BTN_GREEN, fg="white",
-            width=18, height=2, relief="flat",
+            width=20, height=2, relief="flat",
             command=lambda: controller.show_frame("PatientMenuPage")
         )
         self.clinic_btn = tk.Button(
             self.button_frame, text="Clinic Locations",
             font=FONT_MEDIUM, bg="#FF9800", fg="white",
-            width=18, height=2, relief="flat",
+            width=20, height=2, relief="flat",
             command=lambda: controller.show_frame("LocationMenuPage")
         )
         self.clinic_btn.pack(side=tk.TOP, pady=5)
@@ -353,7 +353,7 @@ class HomePage(tk.Frame):
         self.records_btn = tk.Button(
             self.button_frame, text="Medical Records",
             font=FONT_MEDIUM, bg="#9C27B0", fg="white",
-            width=18, height=2, relief="flat",
+            width=20, height=2, relief="flat",
             command=lambda: controller.show_frame("MedicalRecordsPage")
         )
         self.records_btn.pack(side=tk.TOP, pady=5)
@@ -361,7 +361,7 @@ class HomePage(tk.Frame):
         self.billing_btn = tk.Button(
             self.button_frame, text="Billing",
             font=FONT_MEDIUM, bg="#00897B", fg="white",
-            width=18, height=2, relief="flat",
+            width=20, height=2, relief="flat",
             command=lambda: controller.show_frame("BillingMenuPage")
         )
         self.billing_btn.pack(side=tk.TOP, pady=5)
@@ -369,12 +369,11 @@ class HomePage(tk.Frame):
         self.staff_btn = tk.Button(
             self.button_frame, text="Provider",
             font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
-            width=18, height=2, relief="flat",
+            width=20, height=2, relief="flat",
             command=lambda: controller.show_frame("StaffMenuPage")
         )
-
-        self.buttons = [self.patient_btn, self.staff_btn]
-        for btn in self.buttons:
+        self.buttons = [self.patient_btn, self.staff_btn] 
+        for btn in self.buttons: 
             btn.pack(side=tk.TOP, pady=5)
 
         # Horizontal bar
