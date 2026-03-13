@@ -40,15 +40,7 @@ def is_valid_phone(s: str) -> bool:
 class StaffManagementFrame(tk.Frame):
     def __init__(self, parent=None):
         super().__init__(parent, bg=BG_COLOR)
-        self.location_map = {}  # display label -> location_id
-        # Add location_id column to Staff if not already present
-        try:
-            conn = sqlite3.connect(DB_NAME)
-            conn.execute("ALTER TABLE Staff ADD COLUMN location_id INTEGER")
-            conn.commit()
-            conn.close()
-        except sqlite3.OperationalError:
-            pass  # column already exists
+        self.location_list = []  # list of (label, location_id)
         self._build_ui()
         self._load_locations()
         self._load_staff()
@@ -69,7 +61,7 @@ class StaffManagementFrame(tk.Frame):
         self.search_var.trace_add("write", lambda *_: self._filter_staff())
         tk.Entry(search_row, textvariable=self.search_var, width=22).pack(side="left", padx=6)
 
-        cols = ("ID", "Name", "Role", "Email", "Phone", "Active", "Location")
+        cols = ("ID", "Name", "Role", "Email", "Phone", "Active", "Locations")
         self.tree = ttk.Treeview(left, columns=cols, show="headings", height=16)
         for col in cols:
             self.tree.heading(col, text=col)
@@ -79,7 +71,7 @@ class StaffManagementFrame(tk.Frame):
         self.tree.column("Email", width=140)
         self.tree.column("Phone", width=75)
         self.tree.column("Active", width=50, anchor="center")
-        self.tree.column("Location", width=120)
+        self.tree.column("Locations", width=160)
 
         vsb = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
@@ -130,16 +122,27 @@ class StaffManagementFrame(tk.Frame):
         tk.Checkbutton(right, variable=self.active_var, bg=CONTAINER_COLOR).grid(row=r, column=1, sticky="w", padx=8)
         r += 1
 
-        # Clinic location (mirrors billing pattern)
-        tk.Label(right, text="Clinic Location", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
-            row=r, column=0, sticky="w", pady=4
+        # Clinic Assignments multi-select listbox
+        tk.Label(right, text="Clinic Assignments", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
+            row=r, column=0, sticky="nw", pady=(6, 0)
         )
-        self.loc_var = tk.StringVar()
-        self.loc_combo = ttk.Combobox(right, textvariable=self.loc_var, state="readonly", width=26)
-        self.loc_combo.grid(row=r, column=1, padx=8, pady=4)
-        r += 1
+        loc_frame = tk.Frame(right, bg=CONTAINER_COLOR)
+        loc_frame.grid(row=r, column=1, padx=8, pady=(6, 4), sticky="w")
+        self.loc_listbox = tk.Listbox(
+            loc_frame, selectmode="multiple", height=5, width=28,
+            exportselection=False, font=FONT_SMALL
+        )
+        loc_sb = ttk.Scrollbar(loc_frame, orient="vertical", command=self.loc_listbox.yview)
+        self.loc_listbox.configure(yscrollcommand=loc_sb.set)
+        self.loc_listbox.pack(side="left")
+        loc_sb.pack(side="left", fill="y")
+        tk.Label(right, text="(Ctrl+click to select multiple)",
+                 bg=CONTAINER_COLOR, fg="gray", font=("Arial", 8)).grid(
+            row=r + 1, column=1, padx=8, sticky="w"
+        )
+        r += 2
 
-        # Password fields (only required for Add)
+        # Password fields
         tk.Label(right, text="Password *", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
             row=r, column=0, sticky="w", pady=4
         )
@@ -225,17 +228,12 @@ class StaffManagementFrame(tk.Frame):
                 "SELECT location_id, name, status FROM ClinicLocation ORDER BY name"
             ).fetchall()
             conn.close()
-            self.location_map.clear()
-            display = []
+            self.location_list.clear()
+            self.loc_listbox.delete(0, tk.END)
             for loc_id, name, status in rows:
                 label = f"{name}  (ID {loc_id})" + (f" [{status}]" if status else "")
-                self.location_map[label] = loc_id
-                display.append(label)
-            self.loc_combo["values"] = display
-            if display:
-                self.loc_combo.current(0)
-            else:
-                self.loc_combo.set("No locations found")
+                self.location_list.append((label, loc_id))
+                self.loc_listbox.insert(tk.END, label)
         except sqlite3.Error as e:
             messagebox.showerror("DB Error", str(e))
 
@@ -245,9 +243,11 @@ class StaffManagementFrame(tk.Frame):
             conn = sqlite3.connect(DB_NAME)
             rows = conn.execute(
                 """SELECT s.staff_id, s.first_name, s.last_name, s.email, s.phone, s.role, s.active_flag,
-                          COALESCE(cl.name, '') AS location_name
+                          COALESCE(GROUP_CONCAT(cl.name, ', '), '') AS locations
                    FROM Staff s
-                   LEFT JOIN ClinicLocation cl ON cl.location_id = s.location_id
+                   LEFT JOIN StaffLocationAssignment sla ON sla.staff_id = s.staff_id AND sla.end_date IS NULL
+                   LEFT JOIN ClinicLocation cl ON cl.location_id = sla.location_id
+                   GROUP BY s.staff_id
                    ORDER BY s.last_name, s.first_name"""
             ).fetchall()
             conn.close()
@@ -259,10 +259,10 @@ class StaffManagementFrame(tk.Frame):
     def _populate_tree(self, rows):
         self.tree.delete(*self.tree.get_children())
         for row in rows:
-            sid, fn, ln, email, phone, role, active, loc_name = row
+            sid, fn, ln, email, phone, role, active, locations = row
             self.tree.insert("", "end", iid=str(sid), values=(
                 sid, f"{fn} {ln}", role, email or "", phone or "",
-                "Yes" if active else "No", loc_name
+                "Yes" if active else "No", locations
             ))
 
     def _filter_staff(self):
@@ -288,16 +288,20 @@ class StaffManagementFrame(tk.Frame):
         try:
             conn = sqlite3.connect(DB_NAME)
             row = conn.execute(
-                "SELECT first_name, last_name, email, phone, role, active_flag, location_id FROM Staff WHERE staff_id=?",
+                "SELECT first_name, last_name, email, phone, role, active_flag FROM Staff WHERE staff_id=?",
                 (staff_id,)
             ).fetchone()
+            assigned_ids = {r[0] for r in conn.execute(
+                "SELECT location_id FROM StaffLocationAssignment WHERE staff_id=? AND end_date IS NULL",
+                (staff_id,)
+            ).fetchall()}
             conn.close()
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", str(e))
             return
         if not row:
             return
-        fn, ln, email, phone, role, active, loc_id = row
+        fn, ln, email, phone, role, active = row
         self.entries["first_name"].delete(0, tk.END); self.entries["first_name"].insert(0, fn or "")
         self.entries["last_name"].delete(0, tk.END);  self.entries["last_name"].insert(0, ln or "")
         self.entries["email"].delete(0, tk.END);      self.entries["email"].insert(0, email or "")
@@ -310,12 +314,14 @@ class StaffManagementFrame(tk.Frame):
         self.pw_entry.delete(0, tk.END)
         self.pw_confirm_entry.delete(0, tk.END)
         self.code_entry.delete(0, tk.END)
-        self.loc_combo.set("")
-        for label, lid in self.location_map.items():
-            if lid == loc_id:
-                self.loc_combo.set(label)
-                break
-        self.status_var.set(f"Loaded staff ID {staff_id}. Edit fields then click Update, Remove, or Delete.")
+
+        # Highlight assigned locations in listbox
+        self.loc_listbox.selection_clear(0, tk.END)
+        for i, (_, loc_id) in enumerate(self.location_list):
+            if loc_id in assigned_ids:
+                self.loc_listbox.selection_set(i)
+
+        self.status_var.set(f"Loaded staff ID {staff_id}. Edit fields then click Update, Deactivate, or Delete.")
 
     # ----------------------------------------------------------- Validation --
     def _collect_form(self):
@@ -326,6 +332,9 @@ class StaffManagementFrame(tk.Frame):
         data["confirm_password"] = self.pw_confirm_entry.get()
         data["code"] = self.code_entry.get().strip()
         return data
+
+    def _get_selected_loc_ids(self):
+        return [self.location_list[i][1] for i in self.loc_listbox.curselection()]
 
     def _validate_base(self, data):
         required = ["first_name", "last_name", "email", "phone", "role"]
@@ -356,13 +365,19 @@ class StaffManagementFrame(tk.Frame):
             messagebox.showerror("Invalid Code", "Invalid staff confirmation code.")
             return
         pw_hash = hash_password(data["password"])
-        loc_id = self.location_map.get(self.loc_var.get().strip()) or None
+        selected_locs = self._get_selected_loc_ids()
         try:
             conn = sqlite3.connect(DB_NAME)
-            conn.execute(
-                "INSERT INTO Staff (first_name, last_name, email, phone, role, active_flag, password_hash, location_id) VALUES (?,?,?,?,?,?,?,?)",
-                (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], pw_hash, loc_id)
+            cur = conn.execute(
+                "INSERT INTO Staff (first_name, last_name, email, phone, role, active_flag, password_hash) VALUES (?,?,?,?,?,?,?)",
+                (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], pw_hash)
             )
+            new_id = cur.lastrowid
+            for loc_id in selected_locs:
+                conn.execute(
+                    "INSERT INTO StaffLocationAssignment (staff_id, location_id, assignment_role, start_date) VALUES (?,?,?,date('now'))",
+                    (new_id, loc_id, data["role"])
+                )
             conn.commit()
             conn.close()
         except sqlite3.Error as e:
@@ -379,7 +394,7 @@ class StaffManagementFrame(tk.Frame):
         data = self._collect_form()
         if not self._validate_base(data):
             return
-        loc_id = self.location_map.get(self.loc_var.get().strip()) or None
+        new_loc_ids = set(self._get_selected_loc_ids())
         pw = data["password"]
         if pw or data["confirm_password"]:
             if len(pw) < 8:
@@ -392,14 +407,29 @@ class StaffManagementFrame(tk.Frame):
                 messagebox.showerror("Invalid Code", "Invalid staff confirmation code.")
                 return
             pw_hash = hash_password(pw)
-            sql = "UPDATE Staff SET first_name=?, last_name=?, email=?, phone=?, role=?, active_flag=?, password_hash=?, location_id=? WHERE staff_id=?"
-            params = (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], pw_hash, loc_id, self._selected_staff_id)
+            sql = "UPDATE Staff SET first_name=?, last_name=?, email=?, phone=?, role=?, active_flag=?, password_hash=? WHERE staff_id=?"
+            params = (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], pw_hash, self._selected_staff_id)
         else:
-            sql = "UPDATE Staff SET first_name=?, last_name=?, email=?, phone=?, role=?, active_flag=?, location_id=? WHERE staff_id=?"
-            params = (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], loc_id, self._selected_staff_id)
+            sql = "UPDATE Staff SET first_name=?, last_name=?, email=?, phone=?, role=?, active_flag=? WHERE staff_id=?"
+            params = (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], self._selected_staff_id)
         try:
             conn = sqlite3.connect(DB_NAME)
             conn.execute(sql, params)
+            # Sync clinic assignments
+            current_locs = {r[0] for r in conn.execute(
+                "SELECT location_id FROM StaffLocationAssignment WHERE staff_id=? AND end_date IS NULL",
+                (self._selected_staff_id,)
+            ).fetchall()}
+            for loc_id in new_loc_ids - current_locs:
+                conn.execute(
+                    "INSERT INTO StaffLocationAssignment (staff_id, location_id, assignment_role, start_date) VALUES (?,?,?,date('now'))",
+                    (self._selected_staff_id, loc_id, data["role"])
+                )
+            for loc_id in current_locs - new_loc_ids:
+                conn.execute(
+                    "UPDATE StaffLocationAssignment SET end_date=date('now') WHERE staff_id=? AND location_id=? AND end_date IS NULL",
+                    (self._selected_staff_id, loc_id)
+                )
             conn.commit()
             conn.close()
         except sqlite3.Error as e:
@@ -409,12 +439,12 @@ class StaffManagementFrame(tk.Frame):
         self._load_staff()
 
     def _remove_staff(self):
-        """Soft delete — sets active_flag = 0, keeps the record in the DB."""
+        """Soft delete — sets active_flag = 0, keeps the record and assignments in the DB."""
         if not self._selected_staff_id:
             messagebox.showwarning("No Selection", "Select a staff member from the list first.")
             return
         name = self._get_selected_name()
-        if not messagebox.askyesno("Confirm Remove", f"Deactivate {name}? They will remain in the database but marked inactive."):
+        if not messagebox.askyesno("Confirm Deactivate", f"Deactivate {name}? They will remain in the database but marked inactive."):
             return
         try:
             conn = sqlite3.connect(DB_NAME)
@@ -422,14 +452,14 @@ class StaffManagementFrame(tk.Frame):
             conn.commit()
             conn.close()
         except sqlite3.Error as e:
-            messagebox.showerror("Database Error", f"Could not remove staff.\n\n{e}")
+            messagebox.showerror("Database Error", f"Could not deactivate staff.\n\n{e}")
             return
-        messagebox.showinfo("Removed", f"{name} has been deactivated.")
+        messagebox.showinfo("Deactivated", f"{name} has been deactivated.")
         self._clear_form()
         self._load_staff()
 
     def _delete_staff(self):
-        """Permanently deletes the staff record."""
+        """Permanently deletes the staff record and all clinic assignments."""
         if not self._selected_staff_id:
             messagebox.showwarning("No Selection", "Select a staff member from the list first.")
             return
@@ -438,6 +468,7 @@ class StaffManagementFrame(tk.Frame):
             return
         try:
             conn = sqlite3.connect(DB_NAME)
+            conn.execute("DELETE FROM StaffLocationAssignment WHERE staff_id=?", (self._selected_staff_id,))
             conn.execute("DELETE FROM Staff WHERE staff_id=?", (self._selected_staff_id,))
             conn.commit()
             conn.close()
@@ -468,8 +499,7 @@ class StaffManagementFrame(tk.Frame):
         self.pw_entry.delete(0, tk.END)
         self.pw_confirm_entry.delete(0, tk.END)
         self.code_entry.delete(0, tk.END)
-        if self.loc_combo["values"]:
-            self.loc_combo.current(0)
+        self.loc_listbox.selection_clear(0, tk.END)
         self._selected_staff_id = None
         self.tree.selection_remove(self.tree.selection())
         self.status_var.set("Form cleared. Select a staff member or fill in the form to add.")
