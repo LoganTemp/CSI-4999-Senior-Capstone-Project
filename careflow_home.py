@@ -1159,6 +1159,7 @@ class StaffManagementPage(tk.Frame):
     def __init__(self, parent, controller: CareFlowApp):
         super().__init__(parent, bg=BG_COLOR)
         self.controller = controller
+        self._logo_img = None
 
         header = tk.Frame(self, bg=BG_COLOR)
         header.pack(fill="x", padx=12, pady=(10, 0))
@@ -1171,6 +1172,16 @@ class StaffManagementPage(tk.Frame):
             width=10, height=1, relief="flat",
             command=lambda: controller.show_frame("HomePage")
         ).pack(side="right")
+
+        try:
+            img = Image.open("logo.png").convert("RGBA")
+            h = 48
+            w = int(img.width * h / img.height)
+            img = img.resize((w, h), Image.LANCZOS)
+            self._logo_img = ImageTk.PhotoImage(img)
+            tk.Label(header, image=self._logo_img, bg=BG_COLOR).pack(side="right", padx=12)
+        except Exception:
+            pass
 
         staff_frame = StaffManagementFrame(self)
         staff_frame.pack(fill="both", expand=True)
