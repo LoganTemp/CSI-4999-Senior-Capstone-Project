@@ -9,6 +9,7 @@ import hashlib
 from records import RecordsFrame
 from billing_staff_app import BillingFrame
 from billing_patient_app import BillingPatientFrame
+from staff_management import StaffManagementFrame
 
 DB_NAME = "healthcare.db"
 
@@ -254,7 +255,7 @@ class CareFlowApp(tk.Tk):
         container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
-        for F in (HomePage, PatientMenuPage, NewPatientPage, LocationMenuPage, StaffMenuPage, NewStaffPage, MedicalRecordsPage, BillingMenuPage, BillingPage, PatientBillingPage):
+        for F in (HomePage, PatientMenuPage, NewPatientPage, LocationMenuPage, StaffMenuPage, NewStaffPage, MedicalRecordsPage, StaffManagementPage, BillingMenuPage, BillingPage, PatientBillingPage):
             frame = F(parent=container, controller=self)
             self.frames[F.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
@@ -372,8 +373,16 @@ class HomePage(tk.Frame):
             width=20, height=2, relief="flat",
             command=lambda: controller.show_frame("StaffMenuPage")
         )
-        self.buttons = [self.patient_btn, self.staff_btn] 
-        for btn in self.buttons: 
+        self.staff_mgmt_btn = tk.Button(
+            self.button_frame, text="Staff Management",
+            font=FONT_MEDIUM, bg="#5E35B1", fg="white",
+            width=20, height=2, relief="flat",
+            command=lambda: controller.show_frame("StaffManagementPage")
+        )
+        self.staff_mgmt_btn.pack(side=tk.TOP, pady=5)
+
+        self.buttons = [self.patient_btn, self.staff_btn]
+        for btn in self.buttons:
             btn.pack(side=tk.TOP, pady=5)
 
         # Horizontal bar
@@ -1143,6 +1152,28 @@ class PatientBillingPage(tk.Frame):
 
         patient_billing_frame = BillingPatientFrame(self)
         patient_billing_frame.pack(fill="both", expand=True)
+
+
+# ---------------- STAFF MANAGEMENT PAGE ----------------
+class StaffManagementPage(tk.Frame):
+    def __init__(self, parent, controller: CareFlowApp):
+        super().__init__(parent, bg=BG_COLOR)
+        self.controller = controller
+
+        header = tk.Frame(self, bg=BG_COLOR)
+        header.pack(fill="x", padx=12, pady=(10, 0))
+
+        tk.Label(header, text="Staff Management", font=FONT_LARGE, bg=BG_COLOR, fg=FG_COLOR).pack(side="left")
+
+        tk.Button(
+            header, text="Back",
+            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
+            width=10, height=1, relief="flat",
+            command=lambda: controller.show_frame("HomePage")
+        ).pack(side="right")
+
+        staff_frame = StaffManagementFrame(self)
+        staff_frame.pack(fill="both", expand=True)
 
 
 if __name__ == "__main__":
