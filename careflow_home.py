@@ -7,8 +7,8 @@ from datetime import datetime
 import os
 import hashlib
 from records import RecordsFrame
-from billing_staff_app import BillingFrame
-from billing_patient_app import BillingPatientFrame
+from billing_staff_app import BillingFrame as StaffBillingFrame
+from billing_patient_app import BillingFrame as PatientBillingFrame
 from staff_management import StaffManagementFrame
 
 DB_NAME = "healthcare.db"
@@ -191,7 +191,6 @@ def update_clinic_location(location_id, name=None, address=None, city=None, stat
             values.append(phone)
 
         if not fields:
-            # Nothing to update
             conn.close()
             return False
 
@@ -771,7 +770,7 @@ class LocationMenuPage(tk.Frame):
 
         # Load from DB
         clinics = get_all_active_clinics()
-        print("DEBUG: clinics loaded:", clinics)  # optional debug
+        print("DEBUG: clinics loaded:", clinics)
         for c in clinics:
             self.tree.insert("", "end", values=c)
 
@@ -805,8 +804,8 @@ class LocationMenuPage(tk.Frame):
 
             success = add_clinic_location(new_name, new_address, new_city, new_state, new_zip, new_phone)
             if success:
-                win.destroy()             # close popup first
-                self.refresh_clinics()    # refresh table
+                win.destroy()
+                self.refresh_clinics()
                 messagebox.showinfo("Success", f"Clinic '{new_name}' added successfully!")
             else:
                 messagebox.showerror("Error", "Failed to add clinic.")
@@ -822,10 +821,8 @@ class LocationMenuPage(tk.Frame):
             messagebox.showwarning("Select Clinic", "Please select a clinic to update.")
             return
 
-        # Get all current values from the selected row
         clinic_id = self.tree.item(selected[0])["values"][0]
 
-        # Fetch the full clinic record from DB to pre-fill all fields
         conn = sqlite3.connect(DB_NAME)
         cur = conn.cursor()
         cur.execute("""
@@ -842,7 +839,6 @@ class LocationMenuPage(tk.Frame):
 
         name, address, city, state, zip_code, phone = row
 
-        # Popup window
         win = tk.Toplevel(self)
         win.title("Update Clinic")
         win.geometry("400x350")
@@ -857,7 +853,6 @@ class LocationMenuPage(tk.Frame):
             ent.grid(row=idx, column=1, padx=10, pady=5)
             entries[label_text.lower()] = ent
 
-        # Submit function
         def submit():
             new_name = entries["name"].get().strip()
             new_address = entries["address"].get().strip()
@@ -880,8 +875,8 @@ class LocationMenuPage(tk.Frame):
                 phone=new_phone
             )
             if success:
-                win.destroy()             # close popup first
-                self.refresh_clinics()    # refresh table
+                win.destroy()
+                self.refresh_clinics()
                 messagebox.showinfo("Success", f"Clinic '{new_name}' updated successfully!")
             else:
                 messagebox.showerror("Error", "Failed to update clinic.")
@@ -897,17 +892,14 @@ class LocationMenuPage(tk.Frame):
             messagebox.showwarning("Select Clinic", "Please select a clinic to delete.")
             return
 
-        # Get clinic ID and Name from the selected row
         clinic_id, name = self.tree.item(selected[0])["values"][0:2]
 
-        # Confirm deletion
         if not messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{name}'?"):
             return
 
-        # Call DB helper
         success = soft_delete_clinic_location(clinic_id)
         if success:
-            self.refresh_clinics()  # Refresh table immediately
+            self.refresh_clinics()
             messagebox.showinfo("Deleted", f"Clinic '{name}' was deleted.")
         else:
             messagebox.showerror("Error", "Failed to delete clinic.")
@@ -950,7 +942,6 @@ class NewStaffPage(tk.Frame):
         add_row("Email", "email", r, required=True); r += 1
         add_row("Phone (###-####)", "phone", r, required=True); r += 1
 
-        # Role dropdown
         tk.Label(form, text="Role *", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
             row=r, column=0, sticky="w", padx=10, pady=5
         )
@@ -1022,12 +1013,9 @@ class NewStaffPage(tk.Frame):
 
         pw_hash = hash_password(data["password"])
 
-        # Insert into Staff
         try:
             conn = sqlite3.connect(DB_NAME)
             cur = conn.cursor()
-
-            # Keep active_flag = 1 by default
             cur.execute("""
                 INSERT INTO Staff (first_name, last_name, email, phone, role, active_flag, password_hash)
                 VALUES (?, ?, ?, ?, ?, 1, ?)
@@ -1128,7 +1116,7 @@ class BillingPage(tk.Frame):
             command=lambda: controller.show_frame("BillingMenuPage")
         ).pack(side="right")
 
-        billing_frame = BillingFrame(self)
+        billing_frame = StaffBillingFrame(self)
         billing_frame.pack(fill="both", expand=True)
 
 
@@ -1150,7 +1138,7 @@ class PatientBillingPage(tk.Frame):
             command=lambda: controller.show_frame("BillingMenuPage")
         ).pack(side="right")
 
-        patient_billing_frame = BillingPatientFrame(self)
+        patient_billing_frame = PatientBillingFrame(self)
         patient_billing_frame.pack(fill="both", expand=True)
 
 
