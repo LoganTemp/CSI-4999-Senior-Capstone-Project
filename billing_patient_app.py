@@ -192,6 +192,7 @@ class BillingFrame(tk.Frame):
 
         ttk.Button(bottom, text="Pay Selected Bill", command=self.pay_selected).grid(row=0, column=2, padx=8)
         ttk.Button(bottom, text="Download Receipt", command=self.download_receipt).grid(row=0, column=3, padx=8)
+        ttk.Button(bottom, text="Add Payment Method", command=self.add_payment_method_dialog).grid(row=0, column=4, padx=8)
 
     def logout(self):
         self.logged_in_patient_id = None
@@ -259,6 +260,108 @@ class BillingFrame(tk.Frame):
     def refresh(self):
         self._load_payment_methods()
         self._load_bills()
+
+    def add_payment_method_dialog(self):
+        if not self.logged_in_patient_id:
+            messagebox.showerror("Not logged in", "Please log in first.")
+            return
+
+        win = tk.Toplevel(self)
+        win.title("Add Payment Method")
+        win.geometry("420x320")
+        win.transient(self.winfo_toplevel())
+        win.grab_set()
+
+        ttk.Label(win, text="Payment Type:").grid(row=0, column=0, padx=12, pady=10, sticky="w")
+        type_var = tk.StringVar(value="Visa")
+        type_combo = ttk.Combobox(
+            win,
+            textvariable=type_var,
+            state="readonly",
+            values=["Visa", "MasterCard", "Discover", "Amex", "Debit"],
+            width=25
+        )
+        type_combo.grid(row=0, column=1, padx=12, pady=10, sticky="w")
+
+        ttk.Label(win, text="Card Number:").grid(row=1, column=0, padx=12, pady=10, sticky="w")
+        card_number_var = tk.StringVar()
+        ttk.Entry(win, textvariable=card_number_var, width=28).grid(row=1, column=1, padx=12, pady=10, sticky="w")
+
+        ttk.Label(win, text="Exp Month (MM):").grid(row=2, column=0, padx=12, pady=10, sticky="w")
+        exp_month_var = tk.StringVar()
+        ttk.Entry(win, textvariable=exp_month_var, width=10).grid(row=2, column=1, padx=12, pady=10, sticky="w")
+
+        ttk.Label(win, text="Exp Year (YYYY):").grid(row=3, column=0, padx=12, pady=10, sticky="w")
+        exp_year_var = tk.StringVar()
+        ttk.Entry(win, textvariable=exp_year_var, width=10).grid(row=3, column=1, padx=12, pady=10, sticky="w")
+
+        active_var = tk.IntVar(value=1)
+        ttk.Checkbutton(win, text="Set as active payment method", variable=active_var).grid(
+            row=4, column=0, columnspan=2, padx=12, pady=10, sticky="w"
+        )
+
+        def save_payment_method():
+            pm_type = type_var.get().strip()
+            card_number = card_number_var.get().strip().replace(" ", "").replace("-", "")
+            exp_month = exp_month_var.get().strip()
+            exp_year = exp_year_var.get().strip()
+            active_flag = active_var.get()
+
+            if not pm_type or not card_number or not exp_month or not exp_year:
+                messagebox.showerror("Missing fields", "Please complete all payment method fields.")
+                return
+
+            if not card_number.isdigit() or len(card_number) < 4:
+                messagebox.showerror("Invalid card", "Card number must be numeric and at least 4 digits.")
+                return
+
+            if not exp_month.isdigit() or not (1 <= int(exp_month) <= 12):
+                messagebox.showerror("Invalid month", "Expiration month must be between 1 and 12.")
+                return
+
+            if not exp_year.isdigit() or len(exp_year) != 4:
+                messagebox.showerror("Invalid year", "Expiration year must be 4 digits.")
+                return
+
+            last4 = card_number[-4:]
+            exp_month_db = int(exp_month)
+            exp_year_db = int(exp_year)
+
+            try:
+                cur = self._db().cursor()
+
+                if active_flag == 1:
+                    cur.execute("""
+                        UPDATE PaymentMethod
+                        SET active_flag = 0
+                        WHERE patient_id = ?
+                    """, (self.logged_in_patient_id,))
+
+                cur.execute("""
+                    INSERT INTO PaymentMethod (
+                        patient_id, type, last4, exp_month, exp_year, active_flag
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    self.logged_in_patient_id,
+                    pm_type,
+                    last4,
+                    exp_month_db,
+                    exp_year_db,
+                    active_flag
+                ))
+
+                self._db().commit()
+            except sqlite3.Error as e:
+                messagebox.showerror("Database Error", f"Could not add payment method.\n\n{e}")
+                return
+
+            win.destroy()
+            self.refresh()
+            messagebox.showinfo("Success", f"Payment method ending in {last4} added successfully.")
+
+        ttk.Button(win, text="Save Payment Method", command=save_payment_method).grid(
+            row=5, column=0, columnspan=2, pady=18
+        )
 
     def pay_selected(self):
         sel = self.tree.selection()
