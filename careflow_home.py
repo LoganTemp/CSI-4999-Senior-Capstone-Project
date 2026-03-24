@@ -10,6 +10,7 @@ from records import RecordsFrame
 from billing_staff_app import BillingFrame as StaffBillingFrame
 from billing_patient_app import BillingFrame as PatientBillingFrame
 from staff_management import StaffManagementFrame
+from patient_management import PatientManagementFrame 
 
 DB_NAME = "healthcare.db"
 
@@ -254,7 +255,7 @@ class CareFlowApp(tk.Tk):
         container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
-        for F in (HomePage, PatientMenuPage, NewPatientPage, LocationMenuPage, StaffMenuPage, NewStaffPage, MedicalRecordsPage, StaffManagementPage, BillingMenuPage, BillingPage, PatientBillingPage):
+        for F in (HomePage, PatientMenuPage, NewPatientPage, PatientManagementPage,LocationMenuPage, StaffMenuPage, NewStaffPage, MedicalRecordsPage, StaffManagementPage, BillingMenuPage, BillingPage, PatientBillingPage):
             frame = F(parent=container, controller=self)
             self.frames[F.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
@@ -455,7 +456,7 @@ class PatientMenuPage(tk.Frame):
             content, text="Existing Patient",
             font=FONT_MEDIUM, bg=BTN_GREEN, fg="white",
             width=18, height=2, relief="flat",
-            command=lambda: messagebox.showinfo("Existing Patient", "Existing patient login screen coming soon")
+            command=lambda: controller.show_frame("PatientManagementPage")
         ).pack(pady=10)
 
         tk.Button(
@@ -1142,6 +1143,41 @@ class PatientBillingPage(tk.Frame):
         patient_billing_frame.pack(fill="both", expand=True)
 
 
+# ------------------ Patient Management Page -------------------
+class PatientManagementPage(tk.Frame):
+    def __init__(self, parent, controller: CareFlowApp):
+        super().__init__(parent, bg=BG_COLOR)
+        self.controller = controller
+        self._logo_img = None
+
+        header = tk.Frame(self, bg=BG_COLOR)
+        header.pack(fill="x", padx=12, pady=(10, 0))
+
+        tk.Label(header, text="Patient Management", font=FONT_LARGE,
+                 bg=BG_COLOR, fg=FG_COLOR).pack(side="left")
+
+        tk.Button(
+            header, text="Back",
+            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
+            width=10, height=1, relief="flat",
+            command=lambda: controller.show_frame("PatientMenuPage")
+        ).pack(side="right")
+
+        # Optional logo (same as staff page)
+        try:
+            img = Image.open("logo.png").convert("RGBA")
+            h = 48
+            w = int(img.width * h / img.height)
+            img = img.resize((w, h), Image.LANCZOS)
+            self._logo_img = ImageTk.PhotoImage(img)
+            tk.Label(header, image=self._logo_img, bg=BG_COLOR).pack(side="right", padx=12)
+        except Exception:
+            pass
+
+        patient_frame = PatientManagementFrame(self)
+        patient_frame.pack(fill="both", expand=True)
+
+
 # ---------------- STAFF MANAGEMENT PAGE ----------------
 class StaffManagementPage(tk.Frame):
     def __init__(self, parent, controller: CareFlowApp):
@@ -1178,3 +1214,5 @@ class StaffManagementPage(tk.Frame):
 if __name__ == "__main__":
     app = CareFlowApp()
     app.mainloop()
+
+
