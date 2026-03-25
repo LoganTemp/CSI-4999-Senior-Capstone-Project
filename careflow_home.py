@@ -341,8 +341,10 @@ class HomePage(tk.Frame):
             self.button_frame, text="Patient",
             font=FONT_MEDIUM, bg=BTN_GREEN, fg="white",
             width=20, height=2, relief="flat",
-            command=lambda: controller.show_frame("PatientMenuPage")
+            command=lambda: controller.show_frame("PatientManagementPage")
         )
+        self.patient_btn.pack(side=tk.TOP, pady=5)
+        self.buttons = []
         self.clinic_btn = tk.Button(
             self.button_frame, text="Clinic Locations",
             font=FONT_MEDIUM, bg="#FF9800", fg="white",
@@ -367,12 +369,7 @@ class HomePage(tk.Frame):
         )
         self.billing_btn.pack(side=tk.TOP, pady=5)
 
-        self.staff_btn = tk.Button(
-            self.button_frame, text="Provider",
-            font=FONT_MEDIUM, bg=BTN_BLUE, fg="white",
-            width=20, height=2, relief="flat",
-            command=lambda: controller.show_frame("StaffMenuPage")
-        )
+       
         self.staff_mgmt_btn = tk.Button(
             self.button_frame, text="Staff Management",
             font=FONT_MEDIUM, bg="#5E35B1", fg="white",
@@ -381,7 +378,7 @@ class HomePage(tk.Frame):
         )
         self.staff_mgmt_btn.pack(side=tk.TOP, pady=5)
 
-        self.buttons = [self.patient_btn, self.staff_btn]
+
         for btn in self.buttons:
             btn.pack(side=tk.TOP, pady=5)
 
