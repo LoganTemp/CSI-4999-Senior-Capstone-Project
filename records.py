@@ -203,9 +203,9 @@ class RecordsFrame(tk.Frame):
         bottom = ttk.Frame(self, padding=12)
         bottom.pack(fill="x")
 
-        ttk.Button(bottom, text="Upload", command=self.upload_file).pack(side="left")
-        ttk.Button(bottom, text="Download", command=self.download_file).pack(side="left", padx=8)
-        ttk.Button(bottom, text="Delete", command=self.delete_file).pack(side="left", padx=8)
+        tk.Button(bottom, text="Upload", bg="#4CAF50", fg="white", width=13, height=2, relief="flat", command=self.upload_file).pack(side="left")
+        tk.Button(bottom, text="Download", bg="#2196F3", fg="white", width=13, height=2, relief="flat", command=self.download_file).pack(side="left", padx=8)
+        tk.Button(bottom, text="Delete", bg="#e53935", fg="white", width=13, height=2, relief="flat", command=self.delete_file).pack(side="left", padx=8)
 
         ttk.Label(
             bottom,
