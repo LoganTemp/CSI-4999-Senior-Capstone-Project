@@ -42,6 +42,8 @@ class PatientManagementFrame(tk.Frame):
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
+        self.tree.tag_configure("inactive", foreground="gray")
+
         # ---------- RIGHT FORM ----------
         right = tk.Frame(self, bg=CONTAINER_COLOR, padx=15, pady=15)
         right.pack(side="left", fill="y", padx=10, pady=10)
@@ -92,15 +94,32 @@ class PatientManagementFrame(tk.Frame):
     # ---------------- LOAD ----------------
     def _load_patients(self):
         conn = sqlite3.connect(DB_NAME)
-        rows = conn.execute("SELECT patient_id, first_name, last_name, phone, email FROM Patient").fetchall()
+        # rows = conn.execute("SELECT patient_id, first_name, last_name, phone, email FROM Patient").fetchall()
+        rows = conn.execute("""
+            SELECT patient_id, first_name, last_name, phone, email, active_flag
+            FROM Patient
+        """).fetchall()
         conn.close()
 
         self.tree.delete(*self.tree.get_children())
 
+        #for row in rows:
+        #    pid, fn, ln, phone, email = row
+        #    self.tree.insert("", "end", iid=str(pid),
+        #                     values=(pid, f"{fn} {ln}", phone, email))
+
         for row in rows:
-            pid, fn, ln, phone, email = row
-            self.tree.insert("", "end", iid=str(pid),
-                             values=(pid, f"{fn} {ln}", phone, email))
+            pid, fn, ln, phone, email, active = row
+
+            tag = "inactive" if active == 0 else ""
+
+            self.tree.insert(
+                "",
+                "end",
+                iid=str(pid),
+                values=(pid, f"{fn} {ln}", phone, email),
+                tags=(tag,)
+            )
 
     # ---------------- SELECT ----------------
     def _on_select(self, event):
