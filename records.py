@@ -28,7 +28,7 @@ def get_conn() -> sqlite3.Connection:
 def ensure_records_table_exists() -> None:
     """
     Safe guard: creates the records table if it doesn't exist.
-    Matches your schema:
+    Schema kept the same:
       record_id, patient_id (NOT NULL), staff_id (nullable), filename, filepath, upload_date
     """
     conn = get_conn()
@@ -45,26 +45,53 @@ def ensure_records_table_exists() -> None:
             FOREIGN KEY (staff_id) REFERENCES Staff(staff_id)
         )
     """)
-    # Helpful indexes
     cur.execute("CREATE INDEX IF NOT EXISTS idx_records_patient_id ON records(patient_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_records_staff_id ON records(staff_id)")
     conn.commit()
     conn.close()
 
 
-def load_patients() -> Tuple[Dict[str, int], List[str]]:
+def load_clinics() -> Tuple[Dict[str, int], List[str]]:
     """
     Returns:
-      patient_map: display_label -> patient_id
-      display_list: list of display labels (for dropdown)
+      clinic_map: display_label -> location_id
+      display_list: list of clinic labels
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT location_id, name, city, state, status
+        FROM ClinicLocation
+        ORDER BY name, city, state
+    """)
+    rows = cur.fetchall()
+    conn.close()
+
+    clinic_map: Dict[str, int] = {}
+    display: List[str] = []
+
+    for loc_id, name, city, state, status in rows:
+        label = f"{name} ({city}, {state}) [ID {loc_id}]"
+        if status:
+            label += f" [{status}]"
+        clinic_map[label] = loc_id
+        display.append(label)
+
+    return clinic_map, display
+
+
+def load_patients_for_clinic(location_id: int) -> Tuple[Dict[str, int], List[str]]:
+    """
+    Returns only patients assigned to the selected clinic.
     """
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
         SELECT patient_id, first_name, last_name, email
         FROM Patient
+        WHERE location_id = ?
         ORDER BY last_name, first_name
-    """)
+    """, (location_id,))
     rows = cur.fetchall()
     conn.close()
 
@@ -107,41 +134,59 @@ class RecordsFrame(tk.Frame):
 
         ensure_records_table_exists()
 
-        self.patient_map, patients = load_patients()
+        self.clinic_map, clinics = load_clinics()
+        self.patient_map: Dict[str, int] = {}
 
-        # Top frame: patient select + search
+        # ------------------------------
+        # Top frame: clinic + patient + search
+        # ------------------------------
         top = ttk.Frame(self, padding=12)
         top.pack(fill="x")
 
-        ttk.Label(top, text="Patient:").grid(row=0, column=0, sticky="w")
+        ttk.Label(top, text="Clinic Location:").grid(row=0, column=0, sticky="w")
+        self.clinic_var = tk.StringVar()
+        self.clinic_combo = ttk.Combobox(top, textvariable=self.clinic_var, state="readonly", width=45)
+        self.clinic_combo.grid(row=0, column=1, padx=8, sticky="w")
+        self.clinic_combo["values"] = clinics
+        self.clinic_combo.bind("<<ComboboxSelected>>", lambda e: self.on_clinic_selected())
+
+        ttk.Button(top, text="Reload Clinics", command=self.reload_clinics).grid(row=0, column=2, padx=6)
+
+        ttk.Label(top, text="Patient:").grid(row=1, column=0, sticky="w", pady=(10, 0))
         self.patient_var = tk.StringVar()
         self.patient_combo = ttk.Combobox(top, textvariable=self.patient_var, state="readonly", width=45)
-        self.patient_combo.grid(row=0, column=1, padx=8, sticky="w")
-        self.patient_combo["values"] = patients
+        self.patient_combo.grid(row=1, column=1, padx=8, sticky="w", pady=(10, 0))
+        self.patient_combo.bind("<<ComboboxSelected>>", lambda e: self.update_file_list())
 
-        ttk.Button(top, text="Reload Patients", command=self.reload_patients).grid(row=0, column=2, padx=6)
+        ttk.Button(top, text="Reload Patients", command=self.reload_patients_for_selected_clinic).grid(
+            row=1, column=2, padx=6, pady=(10, 0)
+        )
 
-        ttk.Label(top, text="Search filename:").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        ttk.Label(top, text="Search filename:").grid(row=2, column=0, sticky="w", pady=(10, 0))
         self.search_var = tk.StringVar()
         search_entry = ttk.Entry(top, textvariable=self.search_var, width=48)
-        search_entry.grid(row=1, column=1, padx=8, sticky="w", pady=(10, 0))
+        search_entry.grid(row=2, column=1, padx=8, sticky="w", pady=(10, 0))
         search_entry.bind("<KeyRelease>", self.update_file_list)
 
-        ttk.Button(top, text="Refresh", command=self.update_file_list).grid(row=1, column=2, padx=6, pady=(10, 0))
+        ttk.Button(top, text="Refresh", command=self.update_file_list).grid(row=2, column=2, padx=6, pady=(10, 0))
 
+        # ------------------------------
         # Table: records list
+        # ------------------------------
         mid = ttk.Frame(self, padding=(12, 0, 12, 0))
         mid.pack(fill="both", expand=True)
 
-        cols = ("record_id", "filename", "upload_date")
+        cols = ("record_id", "patient", "filename", "upload_date")
         self.tree = ttk.Treeview(mid, columns=cols, show="headings", height=14)
         self.tree.heading("record_id", text="Record ID")
+        self.tree.heading("patient", text="Patient")
         self.tree.heading("filename", text="Filename")
         self.tree.heading("upload_date", text="Upload Date")
 
         self.tree.column("record_id", width=90, anchor="center")
-        self.tree.column("filename", width=420)
-        self.tree.column("upload_date", width=220)
+        self.tree.column("patient", width=220)
+        self.tree.column("filename", width=280)
+        self.tree.column("upload_date", width=180)
 
         vsb = ttk.Scrollbar(mid, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
@@ -152,7 +197,9 @@ class RecordsFrame(tk.Frame):
         mid.grid_rowconfigure(0, weight=1)
         mid.grid_columnconfigure(0, weight=1)
 
+        # ------------------------------
         # Buttons
+        # ------------------------------
         bottom = ttk.Frame(self, padding=12)
         bottom.pack(fill="x")
 
@@ -162,35 +209,60 @@ class RecordsFrame(tk.Frame):
 
         ttk.Label(
             bottom,
-            text="(Staff ID is left blank until login is implemented.)",
+            text="Records are grouped by clinic, but still stored under each patient.",
             foreground="gray"
         ).pack(side="right")
 
         # Default selections
-        if patients:
-            self.patient_combo.current(0)
-            self.update_file_list()
+        if clinics:
+            self.clinic_combo.current(0)
+            self.on_clinic_selected()
         else:
-            self.patient_combo.set("No patients found")
-
-        self.patient_combo.bind("<<ComboboxSelected>>", lambda e: self.update_file_list())
+            self.clinic_combo.set("No clinics found")
 
     # ------------------------------
     # Helpers
     # ------------------------------
+    def get_selected_clinic_id(self) -> Optional[int]:
+        label = self.clinic_var.get().strip()
+        return self.clinic_map.get(label)
+
     def get_selected_patient_id(self) -> Optional[int]:
         label = self.patient_var.get().strip()
         return self.patient_map.get(label)
 
-    def reload_patients(self):
-        self.patient_map, patients = load_patients()
+    def reload_clinics(self):
+        self.clinic_map, clinics = load_clinics()
+        self.clinic_combo["values"] = clinics
+        if clinics:
+            self.clinic_combo.current(0)
+            self.on_clinic_selected()
+        else:
+            self.clinic_combo.set("No clinics found")
+            self.patient_combo.set("")
+            self.patient_combo["values"] = []
+            self.clear_tree()
+
+    def reload_patients_for_selected_clinic(self):
+        self.on_clinic_selected()
+
+    def on_clinic_selected(self):
+        clinic_id = self.get_selected_clinic_id()
+        if not clinic_id:
+            self.patient_combo.set("")
+            self.patient_combo["values"] = []
+            self.clear_tree()
+            return
+
+        self.patient_map, patients = load_patients_for_clinic(clinic_id)
         self.patient_combo["values"] = patients
+
         if patients:
             self.patient_combo.current(0)
-            self.update_file_list()
         else:
-            self.patient_combo.set("No patients found")
-            self.clear_tree()
+            self.patient_combo.set("No patients in this clinic")
+
+        self.update_file_list()
 
     def clear_tree(self):
         for item in self.tree.get_children():
@@ -206,36 +278,58 @@ class RecordsFrame(tk.Frame):
         values = self.tree.item(sel[0], "values")
         if not values:
             return None
-        return int(values[0]), values[1]
+        return int(values[0]), values[2]
 
     # ------------------------------
     # Refresh list from DB
     # ------------------------------
     def update_file_list(self, event=None):
-        patient_id = self.get_selected_patient_id()
-        if not patient_id:
+        clinic_id = self.get_selected_clinic_id()
+        if not clinic_id:
             self.clear_tree()
             return
 
+        patient_id = self.get_selected_patient_id()
         search_term = self.search_var.get().strip().lower()
         self.clear_tree()
 
         try:
             conn = get_conn()
             cur = conn.cursor()
-            cur.execute("""
-                SELECT record_id, filename, upload_date
-                FROM records
-                WHERE patient_id = ?
-                ORDER BY upload_date DESC
-            """, (patient_id,))
+
+            if patient_id:
+                cur.execute("""
+                    SELECT
+                        r.record_id,
+                        p.last_name || ', ' || p.first_name || ' (ID ' || p.patient_id || ')' AS patient_name,
+                        r.filename,
+                        r.upload_date
+                    FROM records r
+                    JOIN Patient p ON p.patient_id = r.patient_id
+                    WHERE p.location_id = ?
+                      AND r.patient_id = ?
+                    ORDER BY r.upload_date DESC
+                """, (clinic_id, patient_id))
+            else:
+                cur.execute("""
+                    SELECT
+                        r.record_id,
+                        p.last_name || ', ' || p.first_name || ' (ID ' || p.patient_id || ')' AS patient_name,
+                        r.filename,
+                        r.upload_date
+                    FROM records r
+                    JOIN Patient p ON p.patient_id = r.patient_id
+                    WHERE p.location_id = ?
+                    ORDER BY r.upload_date DESC
+                """, (clinic_id,))
+
             rows = cur.fetchall()
             conn.close()
 
-            for record_id, filename, upload_date in rows:
+            for record_id, patient_name, filename, upload_date in rows:
                 if search_term and search_term not in (filename or "").lower():
                     continue
-                self.tree.insert("", "end", values=(record_id, filename, upload_date))
+                self.tree.insert("", "end", values=(record_id, patient_name, filename, upload_date))
 
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", str(e))
@@ -244,9 +338,14 @@ class RecordsFrame(tk.Frame):
     # Upload File
     # ------------------------------
     def upload_file(self):
+        clinic_id = self.get_selected_clinic_id()
+        if not clinic_id:
+            messagebox.showwarning("Clinic Required", "Please select a clinic first.")
+            return
+
         patient_id = self.get_selected_patient_id()
         if not patient_id:
-            messagebox.showwarning("Patient Required", "Please select a patient before uploading.")
+            messagebox.showwarning("Patient Required", "Please select a patient in the selected clinic before uploading.")
             return
 
         file_path = filedialog.askopenfilename()
@@ -352,17 +451,10 @@ class RecordsFrame(tk.Frame):
             messagebox.showerror("Error", str(e))
 
 
-class RecordSystem(tk.Toplevel):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.title("CareFlow - Medical Records")
-        self.geometry("780x520")
-        frame = RecordsFrame(self)
-        frame.pack(fill="both", expand=True)
-
-
 if __name__ == "__main__":
     root = tk.Tk()
-    root.withdraw()
-    app = RecordSystem(parent=root)
-    app.mainloop()
+    root.title("CareFlow - Medical Records")
+    root.geometry("950x560")
+    frame = RecordsFrame(root)
+    frame.pack(fill="both", expand=True)
+    root.mainloop()
