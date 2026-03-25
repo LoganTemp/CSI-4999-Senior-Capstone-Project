@@ -81,7 +81,7 @@ class PatientManagementFrame(tk.Frame):
                   command=self._update_patient).pack(side="left", padx=4)
 
         tk.Button(btn_frame, text="Remove Patient", bg="#FF9800", fg="white",
-                  command=self._remove_patient).pack(side="left", padx=4)
+                  command=self.soft_delete_patient).pack(side="left", padx=4)
 
         tk.Button(btn_frame, text="Delete Patient", bg=BTN_RED, fg="white",
                   command=self._delete_patient).pack(side="left", padx=4)
@@ -167,12 +167,35 @@ class PatientManagementFrame(tk.Frame):
         messagebox.showinfo("Updated", "Patient updated.")
         self._load_patients()
 
+
     # ---------------- REMOVE ----------------
-    def _remove_patient(self):
+    def soft_delete_patient(self):
         if not self._selected_patient_id:
+            messagebox.showwarning("Select", "Select a patient first.")
             return
 
-        messagebox.showinfo("Info", "Soft delete not implemented (no active_flag column).")
+        if not messagebox.askyesno("Confirm", "Deactivate this patient?"):
+            return
+
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            cur = conn.cursor()
+
+            cur.execute("""
+                UPDATE Patient
+                SET active_flag = 0
+                WHERE patient_id = ?
+            """, (self._selected_patient_id,))
+
+            conn.commit()
+            conn.close()
+
+            messagebox.showinfo("Success", "Patient deactivated.")
+            self._load_patients()
+            self._clear_form()
+
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Failed to delete patient:\n\n{e}")
 
     # ---------------- DELETE ----------------
     def _delete_patient(self):

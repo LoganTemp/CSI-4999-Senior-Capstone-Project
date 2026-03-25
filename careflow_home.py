@@ -57,6 +57,23 @@ def ensure_staff_password_column():
     except sqlite3.Error as e:
         messagebox.showerror("Database Error", f"Staff schema update failed:\n\n{e}")
 
+def ensure_patient_active_flag():
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+
+        cur.execute("PRAGMA table_info(Patient)")
+        cols = [row[1] for row in cur.fetchall()]
+
+        if "active_flag" not in cols:
+            cur.execute("ALTER TABLE Patient ADD COLUMN active_flag INTEGER DEFAULT 1")
+            conn.commit()
+
+        conn.close()
+
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"Failed to update Patient table:\n\n{e}")        
+
 
 # ------------------------ Password hashing ------------------------
 def hash_password(password: str, iterations: int = 200_000) -> str:
@@ -245,6 +262,7 @@ class CareFlowApp(tk.Tk):
         # Ensure DB schema is ready BEFORE UI tries to insert
         ensure_patient_password_column()
         ensure_staff_password_column()
+        ensure_patient_active_flag()
 
         self.logo_img = None
         self._load_logo()
