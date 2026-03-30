@@ -16,12 +16,12 @@ from tkinter import messagebox
 
 # ---------- Configuration / Styles ----------
 BG_LIGHT = "#e6f2ec"
-BG_SIDEBAR = "#c8e6d8"
+BG_SIDEBAR = "#95ecdf"
 BG_PANEL = "#ffffff"
-ACCENT = "#6fcf97"
+ACCENT = "#308684"
 CARD_BG = "#f7fff7"
 TEXT = "#0b3d2e"
-SIDEBAR_WIDTH = 220
+SIDEBAR_WIDTH = 800
 FONT_HEADER = ("Helvetica", 16, "bold")
 FONT_TITLE = ("Helvetica", 20, "bold")
 FONT_CARD_NUM = ("Helvetica", 16, "bold")
@@ -62,7 +62,7 @@ class CareFlowDashboard(tk.Tk):
         # Logo / App name
         logo_frame = tk.Frame(sidebar, bg=BG_SIDEBAR)
         logo_frame.pack(fill="x", padx=12, pady=(12, 8))
-        logo_lbl = tk.Label(logo_frame, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR,
+        logo_lbl = tk.Label(logo_frame, text="CareFlow", bg=BG_SIDEBAR,
                             fg=TEXT, font=("Helvetica", 12, "bold"), justify="left")
         logo_lbl.pack(anchor="w")
 
