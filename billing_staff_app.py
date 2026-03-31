@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox, ttk
 import sqlite3
 import os
 import hashlib
@@ -7,6 +7,22 @@ import hmac
 from datetime import datetime
 
 DB_NAME = "healthcare.db"
+
+# --- Dashboard style palette ---
+BG_LIGHT = "#e6f2ec"
+BG_SIDEBAR = "#5FAF90"
+BG_SIDEBAR_LIGHT = "#A2DDC6"
+BG_PANEL = "#ffffff"
+CARD_BG = "#f7fff7"
+ACCENT = "#308684"
+TEXT = "#0b3d2e"
+BORDER = "#cfd8d3"
+
+FONT_TITLE = ("Helvetica", 20, "bold")
+FONT_HEADER = ("Helvetica", 14, "bold")
+FONT_BODY = ("Helvetica", 10)
+FONT_SMALL = ("Helvetica", 9)
+FONT_BTN = ("Helvetica", 10, "bold")
 
 BILLING_TEMPLATES = {
     "Checkup": 75.00,
@@ -65,7 +81,7 @@ def is_valid_date_yyyy_mm_dd(s: str) -> bool:
 
 class BillingFrame(tk.Frame):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, bg=BG_LIGHT)
         self.conn = sqlite3.connect(DB_NAME)
         ensure_schema(self.conn)
 
@@ -73,7 +89,6 @@ class BillingFrame(tk.Frame):
         self.logged_in_staff_name = ""
         self.patient_map = {}
         self.location_map = {}
-
         self.login_frame = None
         self.app_frame = None
         self.tree = None
@@ -91,24 +106,103 @@ class BillingFrame(tk.Frame):
             self.app_frame.destroy()
             self.app_frame = None
 
+    def _sidebar_button(self, parent, text, active=False):
+        bg = BG_SIDEBAR_LIGHT if active else BG_SIDEBAR
+        return tk.Label(
+            parent,
+            text=text,
+            bg=bg,
+            fg=TEXT,
+            font=FONT_BODY,
+            anchor="w",
+            padx=10,
+            pady=6
+        )
+
+    def _build_sidebar(self, parent, active_label="Billing"):
+        sidebar = tk.Frame(parent, bg=BG_SIDEBAR, width=170)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
+        logo_box.pack(fill="x", padx=10, pady=(12, 10))
+        tk.Label(
+            logo_box,
+            text="CareFlow\nStaff Portal",
+            bg=BG_SIDEBAR_LIGHT,
+            fg=TEXT,
+            font=("Helvetica", 9, "bold"),
+            justify="left",
+            padx=8,
+            pady=8
+        ).pack(anchor="w")
+
+        items = ["Dashboard", "Patient", "Staff", "Clinic", "Records", "Billing"]
+        for item in items:
+            self._sidebar_button(sidebar, item, active=(item == active_label)).pack(fill="x", padx=10, pady=2)
+
+        tk.Label(
+            sidebar,
+            text=f"Signed in as:\n{self.logged_in_staff_name or 'Staff'}",
+            bg=BG_SIDEBAR,
+            fg=TEXT,
+            font=FONT_SMALL,
+            justify="left"
+        ).pack(side="bottom", anchor="w", padx=10, pady=12)
+
+        return sidebar
+
     def _build_login_ui(self):
         self._clear_root_frames()
 
-        self.login_frame = ttk.Frame(self, padding=20)
+        self.login_frame = tk.Frame(self, bg=BG_LIGHT)
         self.login_frame.pack(fill="both", expand=True)
 
-        card = ttk.LabelFrame(self.login_frame, text="Staff Login", padding=16)
-        card.pack(expand=True)
+        outer = tk.Frame(self.login_frame, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=20, pady=20)
 
-        ttk.Label(card, text="Email:").grid(row=0, column=0, sticky="w", pady=6)
+        self._build_sidebar(outer, active_label="Billing")
+
+        main = tk.Frame(outer, bg=BG_LIGHT)
+        main.pack(side="left", fill="both", expand=True, padx=(12, 0))
+
+        header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        header.pack(fill="x")
+        tk.Label(header, text="Staff Billing Login", bg=BG_PANEL, fg=TEXT, font=FONT_TITLE).pack(
+            side="left", padx=14, pady=14
+        )
+
+        body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        body.pack(fill="both", expand=True, pady=(10, 0))
+
+        card = tk.Frame(body, bg=CARD_BG, bd=1, relief="solid")
+        card.place(relx=0.5, rely=0.45, anchor="center", width=420, height=230)
+
+        tk.Label(card, text="Login to create and manage bills", bg=CARD_BG, fg=TEXT, font=FONT_HEADER).pack(
+            pady=(18, 14)
+        )
+
+        tk.Label(card, text="Email", bg=CARD_BG, fg=TEXT, font=FONT_BODY).pack(anchor="w", padx=30)
         self.email_var = tk.StringVar()
-        ttk.Entry(card, textvariable=self.email_var, width=35).grid(row=0, column=1, pady=6)
+        tk.Entry(card, textvariable=self.email_var, width=34, bd=1, relief="solid").pack(padx=30, pady=(4, 12))
 
-        ttk.Label(card, text="Password:").grid(row=1, column=0, sticky="w", pady=6)
+        tk.Label(card, text="Password", bg=CARD_BG, fg=TEXT, font=FONT_BODY).pack(anchor="w", padx=30)
         self.password_var = tk.StringVar()
-        ttk.Entry(card, textvariable=self.password_var, show="*", width=35).grid(row=1, column=1, pady=6)
+        tk.Entry(card, textvariable=self.password_var, show="*", width=34, bd=1, relief="solid").pack(
+            padx=30, pady=(4, 14)
+        )
 
-        ttk.Button(card, text="Login", command=self.login_staff).grid(row=2, column=0, columnspan=2, pady=14)
+        tk.Button(
+            card,
+            text="Login",
+            bg=BG_SIDEBAR,
+            fg=TEXT,
+            font=FONT_BTN,
+            relief="flat",
+            padx=18,
+            pady=8,
+            command=self.login_staff
+        ).pack()
 
     def login_staff(self):
         email = self.email_var.get().strip()
@@ -150,78 +244,132 @@ class BillingFrame(tk.Frame):
     def _build_app_ui(self):
         self._clear_root_frames()
 
-        self.app_frame = ttk.Frame(self, padding=12)
+        self.app_frame = tk.Frame(self, bg=BG_LIGHT)
         self.app_frame.pack(fill="both", expand=True)
 
-        top = ttk.LabelFrame(self.app_frame, text="Staff Session", padding=10)
-        top.pack(fill="x")
+        outer = tk.Frame(self.app_frame, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=20, pady=20)
 
-        ttk.Label(top, text=f"Signed in as: {self.logged_in_staff_name}").grid(row=0, column=0, sticky="w")
-        ttk.Button(top, text="Logout", command=self.logout).grid(row=0, column=1, padx=8)
+        self._build_sidebar(outer, active_label="Billing")
 
-        form = ttk.LabelFrame(self.app_frame, text="Create Bill", padding=10)
-        form.pack(fill="x", pady=(10, 10))
+        main = tk.Frame(outer, bg=BG_LIGHT)
+        main.pack(side="left", fill="both", expand=True, padx=(12, 0))
+
+        header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        header.pack(fill="x")
+
+        left_header = tk.Frame(header, bg=BG_PANEL)
+        left_header.pack(side="left", padx=14, pady=12)
+        tk.Label(left_header, text="Staff Billing", bg=BG_PANEL, fg=TEXT, font=FONT_TITLE).pack(anchor="w")
+        tk.Label(left_header, text=f"Signed in as {self.logged_in_staff_name}", bg=BG_PANEL, fg=TEXT, font=FONT_SMALL).pack(anchor="w")
+
+        right_header = tk.Frame(header, bg=BG_PANEL)
+        right_header.pack(side="right", padx=14, pady=12)
+        tk.Button(right_header, text="Logout", bg=ACCENT, fg="white", relief="flat", command=self.logout).pack()
+
+        cards_frame = tk.Frame(main, bg=BG_LIGHT)
+        cards_frame.pack(fill="x", pady=(10, 10))
+
+        self.recent_card = tk.Label(
+            cards_frame, text="Recent Bills\n0", bg=CARD_BG, fg=TEXT, font=("Helvetica", 12, "bold"),
+            bd=1, relief="solid", width=18, height=3, justify="left", anchor="w", padx=12
+        )
+        self.recent_card.pack(side="left", padx=(0, 10))
+
+        self.template_card = tk.Label(
+            cards_frame, text="Templates\n5", bg=CARD_BG, fg=TEXT, font=("Helvetica", 12, "bold"),
+            bd=1, relief="solid", width=18, height=3, justify="left", anchor="w", padx=12
+        )
+        self.template_card.pack(side="left", padx=(0, 10))
+
+        self.patient_card = tk.Label(
+            cards_frame, text="Patients\n0", bg=CARD_BG, fg=TEXT, font=("Helvetica", 12, "bold"),
+            bd=1, relief="solid", width=18, height=3, justify="left", anchor="w", padx=12
+        )
+        self.patient_card.pack(side="left")
+
+        form_panel = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        form_panel.pack(fill="x")
+
+        tk.Label(form_panel, text="Create Bill", bg=BG_PANEL, fg=TEXT, font=FONT_HEADER).pack(
+            anchor="w", padx=12, pady=(10, 6)
+        )
+
+        form = tk.Frame(form_panel, bg=BG_PANEL)
+        form.pack(fill="x", padx=12, pady=(0, 12))
 
         r = 0
-        ttk.Label(form, text="Patient:").grid(row=r, column=0, sticky="w")
+        tk.Label(form, text="Patient:", bg=BG_PANEL, fg=TEXT).grid(row=r, column=0, sticky="w", pady=6)
         self.patient_var = tk.StringVar()
-        self.patient_combo = ttk.Combobox(form, textvariable=self.patient_var, state="readonly", width=50)
-        self.patient_combo.grid(row=r, column=1, padx=8, pady=4, sticky="w")
+        self.patient_combo = ttk.Combobox(form, textvariable=self.patient_var, state="readonly", width=45)
+        self.patient_combo.grid(row=r, column=1, padx=8, pady=6, sticky="w")
         self.patient_combo.bind("<<ComboboxSelected>>", lambda e: self._auto_location_from_patient())
         r += 1
 
-        ttk.Label(form, text="Service template:").grid(row=r, column=0, sticky="w")
+        tk.Label(form, text="Service template:", bg=BG_PANEL, fg=TEXT).grid(row=r, column=0, sticky="w", pady=6)
         self.template_var = tk.StringVar()
         self.template_combo = ttk.Combobox(
             form, textvariable=self.template_var, state="readonly",
-            values=list(BILLING_TEMPLATES.keys()), width=30
+            values=list(BILLING_TEMPLATES.keys()), width=28
         )
-        self.template_combo.grid(row=r, column=1, padx=8, pady=4, sticky="w")
+        self.template_combo.grid(row=r, column=1, padx=8, pady=6, sticky="w")
         self.template_combo.bind("<<ComboboxSelected>>", lambda e: self._apply_template())
         r += 1
 
-        ttk.Label(form, text="Amount ($):").grid(row=r, column=0, sticky="w")
+        tk.Label(form, text="Amount ($):", bg=BG_PANEL, fg=TEXT).grid(row=r, column=0, sticky="w", pady=6)
         self.amount_var = tk.StringVar()
-        self.amount_entry = ttk.Entry(form, textvariable=self.amount_var, width=20)
-        self.amount_entry.grid(row=r, column=1, padx=8, pady=4, sticky="w")
+        self.amount_entry = tk.Entry(form, textvariable=self.amount_var, width=18, bd=1, relief="solid")
+        self.amount_entry.grid(row=r, column=1, padx=8, pady=6, sticky="w")
         r += 1
 
-        ttk.Label(form, text="Due date (YYYY-MM-DD):").grid(row=r, column=0, sticky="w")
+        tk.Label(form, text="Due date (YYYY-MM-DD):", bg=BG_PANEL, fg=TEXT).grid(row=r, column=0, sticky="w", pady=6)
         self.due_var = tk.StringVar()
-        self.due_entry = ttk.Entry(form, textvariable=self.due_var, width=20)
-        self.due_entry.grid(row=r, column=1, padx=8, pady=4, sticky="w")
+        self.due_entry = tk.Entry(form, textvariable=self.due_var, width=18, bd=1, relief="solid")
+        self.due_entry.grid(row=r, column=1, padx=8, pady=6, sticky="w")
         r += 1
 
-        ttk.Label(form, text="Clinic location:").grid(row=r, column=0, sticky="w")
+        tk.Label(form, text="Clinic location:", bg=BG_PANEL, fg=TEXT).grid(row=r, column=0, sticky="w", pady=6)
         self.loc_var = tk.StringVar()
-        self.loc_combo = ttk.Combobox(form, textvariable=self.loc_var, state="readonly", width=50)
-        self.loc_combo.grid(row=r, column=1, padx=8, pady=4, sticky="w")
+        self.loc_combo = ttk.Combobox(form, textvariable=self.loc_var, state="readonly", width=45)
+        self.loc_combo.grid(row=r, column=1, padx=8, pady=6, sticky="w")
         r += 1
 
-        btns = ttk.Frame(self.app_frame, padding=(0, 10))
-        btns.pack(fill="x")
+        action_row = tk.Frame(form_panel, bg=BG_PANEL)
+        action_row.pack(fill="x", padx=12, pady=(0, 12))
 
-        ttk.Button(btns, text="Create Bill", command=self.create_bill).pack(side="left")
-        ttk.Button(btns, text="Clear", command=self.clear_form).pack(side="left", padx=8)
+        tk.Button(
+            action_row, text="Create Bill", bg=BG_SIDEBAR, fg=TEXT,
+            font=FONT_BTN, relief="flat", command=self.create_bill
+        ).pack(side="left", padx=(0, 6))
 
-        recent = ttk.LabelFrame(self.app_frame, text="Recent Bills (latest 25)", padding=10)
-        recent.pack(fill="both", expand=True)
+        tk.Button(
+            action_row, text="Clear", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+            font=FONT_BTN, relief="flat", command=self.clear_form
+        ).pack(side="left")
+
+        recent = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        recent.pack(fill="both", expand=True, pady=(10, 0))
+
+        tk.Label(recent, text="Recent Bills", bg=BG_PANEL, fg=TEXT, font=FONT_HEADER).pack(
+            anchor="w", padx=12, pady=(10, 6)
+        )
+
+        table_wrap = tk.Frame(recent, bg=BG_PANEL)
+        table_wrap.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
         cols = ("bill_id", "patient", "amount", "due_date", "status", "created_at")
-        self.tree = ttk.Treeview(recent, columns=cols, show="headings", height=12)
+        self.tree = ttk.Treeview(recent, columns=cols, show="headings", height=11)
         for c in cols:
-            self.tree.heading(c, text=c)
+            self.tree.heading(c, text=c.replace("_", " ").title())
             self.tree.column(c, width=140 if c != "created_at" else 170)
         self.tree.column("bill_id", width=70)
         self.tree.column("amount", width=90)
         self.tree.column("status", width=90)
 
-        vsb = ttk.Scrollbar(recent, orient="vertical", command=self.tree.yview)
+        vsb = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        recent.grid_rowconfigure(0, weight=1)
-        recent.grid_columnconfigure(0, weight=1)
+        self.tree.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="left", fill="y")
 
         self.template_combo.set("Checkup")
         self._apply_template()
@@ -246,6 +394,7 @@ class BillingFrame(tk.Frame):
             display.append(label)
 
         self.patient_combo["values"] = display
+        self.patient_card.config(text=f"Patients\n{len(display)}")
         if display:
             self.patient_combo.current(0)
             self._auto_location_from_patient()
@@ -289,10 +438,13 @@ class BillingFrame(tk.Frame):
         name = self.template_var.get().strip() or self.template_combo.get().strip()
         amt = BILLING_TEMPLATES.get(name)
         if amt is None:
-            self.amount_entry.configure(state="normal")
+            self.amount_entry.config(state="normal")
+            if not self.amount_var.get().strip():
+                self.amount_var.set("")
         else:
+            self.amount_entry.config(state="normal")
             self.amount_var.set(f"{amt:.2f}")
-            self.amount_entry.configure(state="disabled")
+            self.amount_entry.config(state="disabled")
 
     def clear_form(self):
         if self.patient_combo["values"]:
@@ -300,7 +452,7 @@ class BillingFrame(tk.Frame):
         if self.loc_combo["values"]:
             self.loc_combo.current(0)
         self.template_combo.set("Checkup")
-        self.amount_entry.configure(state="normal")
+        self.amount_entry.config(state="normal")
         self.amount_var.set("")
         self._apply_template()
         self.due_var.set("")
@@ -362,6 +514,8 @@ class BillingFrame(tk.Frame):
             LIMIT 25
         """).fetchall()
 
+        self.recent_card.config(text=f"Recent Bills\n{len(rows)}")
+
         for bill_id, patient, amount, due_date, status, created_at in rows:
             self.tree.insert("", "end", values=(
                 bill_id,
@@ -376,7 +530,7 @@ class BillingFrame(tk.Frame):
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("CareFlow - Staff Billing")
-    root.geometry("820x580")
+    root.geometry("1100x680")
     frame = BillingFrame(root)
     frame.pack(fill="both", expand=True)
     root.mainloop()
