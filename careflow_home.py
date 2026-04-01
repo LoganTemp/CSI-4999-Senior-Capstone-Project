@@ -1222,7 +1222,7 @@ class StaffManagementPage(tk.Frame):
         except Exception:
             pass
 
-        staff_frame = StaffManagementFrame(self)
+        staff_frame = StaffManagementFrame(self, controller=controller)
         staff_frame.pack(fill="both", expand=True)
 
 

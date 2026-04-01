@@ -6,16 +6,21 @@ import hashlib
 
 DB_NAME = "healthcare.db"
 
-BG_COLOR = "#dddede"
-FG_COLOR = "#222"
-BTN_GREEN = "#4CAF50"
-BTN_BLUE = "#2196F3"
-BTN_GRAY = "#e0e0e0"
-BTN_RED = "#e53935"
-CONTAINER_COLOR = "#f2efef"
-FONT_LARGE = ("Arial", 16, "bold")
-FONT_MEDIUM = ("Arial", 12)
-FONT_SMALL = ("Arial", 11)
+# ---------- Dashboard color palette ----------
+BG_LIGHT        = "#e6f2ec"
+BG_SIDEBAR      = "#5FAF90"
+BG_SIDEBAR_LIGHT= "#A2DDC6"
+BG_PANEL        = "#ffffff"
+CARD_BG         = "#f7fff7"
+ACCENT          = "#308684"
+TEXT            = "#0b3d2e"
+BTN_RED         = "#e53935"
+BTN_ORANGE      = "#FF9800"
+FONT_TITLE      = ("Helvetica", 20, "bold")
+FONT_HEADER     = ("Helvetica", 14, "bold")
+FONT_TABLE      = ("Helvetica", 10)
+FONT_SMALL      = ("Helvetica", 10)
+FONT_MEDIUM     = ("Helvetica", 12)
 
 ROLES = ["doctor", "billing", "records", "nurse"]
 CONFIRMATION_CODE = "1234"
@@ -38,187 +43,145 @@ def is_valid_phone(s: str) -> bool:
 
 
 class StaffManagementFrame(tk.Frame):
-    def __init__(self, parent=None):
-        super().__init__(parent, bg=BG_COLOR)
-        self.location_list = []  # list of (label, location_id)
+    def __init__(self, parent=None, controller=None):
+        super().__init__(parent, bg=BG_LIGHT)
+        self.controller = controller
+        self.location_list = []        # list of (label, location_id)
+        self._all_rows = []            # cached DB rows
+        self._total_var = tk.StringVar(value="0")
+        self._active_var = tk.StringVar(value="0")
         self._build_ui()
         self._load_locations()
         self._load_staff()
 
     # ------------------------------------------------------------------ UI --
     def _build_ui(self):
-        # ---- Left panel: staff list ----
-        left = tk.Frame(self, bg=BG_COLOR)
-        left.pack(side="left", fill="both", expand=True, padx=(10, 5), pady=10)
+        # ---- Outer layout: sidebar left, main right ----
+        outer = tk.Frame(self, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=20, pady=20)
 
-        tk.Label(left, text="Staff Members", font=FONT_LARGE, bg=BG_COLOR, fg=FG_COLOR).pack(anchor="w")
+        self._build_sidebar(outer)
 
-        search_row = tk.Frame(left, bg=BG_COLOR)
-        search_row.pack(fill="x", pady=(4, 6))
+        main = tk.Frame(outer, bg=BG_LIGHT)
+        main.pack(side="left", fill="both", expand=True, padx=(12, 0))
 
-        tk.Label(search_row, text="Search:", font=FONT_SMALL, bg=BG_COLOR).pack(side="left")
+        # ---- White header panel ----
+        header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        header.pack(fill="x", padx=12, pady=(12, 0))
+
+        tk.Label(header, text="Staff Management", font=FONT_TITLE,
+                 bg=BG_PANEL, fg=TEXT).pack(side="left", padx=14, pady=14)
+
+        tk.Button(
+            header, text="+ Add Staff", font=FONT_MEDIUM,
+            bg=ACCENT, fg="white", relief="flat", padx=12, pady=6,
+            command=self._open_add_dialog
+        ).pack(side="right", padx=14, pady=14)
+
+        # ---- White body area ----
+        body_outer = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        body_outer.pack(fill="both", expand=True, padx=12, pady=(10, 12))
+
+        # Cards + search row
+        top_row = tk.Frame(body_outer, bg=BG_PANEL)
+        top_row.pack(fill="x", padx=10, pady=(10, 6))
+
+        for label_text, var in [("Total Staff", self._total_var), ("Active Staff", self._active_var)]:
+            card = tk.Frame(top_row, bg=CARD_BG, bd=1, relief="raised", width=150, height=70)
+            card.pack(side="left", padx=8)
+            card.pack_propagate(False)
+            tk.Label(card, textvariable=var, bg=CARD_BG, fg=TEXT,
+                     font=("Helvetica", 16, "bold")).pack(anchor="nw", padx=10, pady=(8, 0))
+            tk.Label(card, text=label_text, bg=CARD_BG, fg=TEXT,
+                     font=FONT_SMALL).pack(anchor="nw", padx=10)
+
+        search_frame = tk.Frame(top_row, bg=BG_PANEL)
+        search_frame.pack(side="left", padx=20)
+        tk.Label(search_frame, text="Search:", bg=BG_PANEL, fg=TEXT, font=FONT_SMALL).pack(side="left")
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._filter_staff())
-        tk.Entry(search_row, textvariable=self.search_var, width=22).pack(side="left", padx=6)
+        tk.Entry(search_frame, textvariable=self.search_var, width=28,
+                 font=FONT_SMALL).pack(side="left", padx=6)
 
-        cols = ("ID", "Name", "Role", "Email", "Phone", "Active", "Locations")
-        self.tree = ttk.Treeview(left, columns=cols, show="headings", height=16)
-        for col in cols:
-            self.tree.heading(col, text=col)
-        self.tree.column("ID", width=40, anchor="center")
-        self.tree.column("Name", width=130)
-        self.tree.column("Role", width=70)
-        self.tree.column("Email", width=140)
-        self.tree.column("Phone", width=75)
-        self.tree.column("Active", width=50, anchor="center")
-        self.tree.column("Locations", width=160)
+        # Table inside body
+        table_container = tk.Frame(body_outer, bg=BG_PANEL)
+        table_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-        vsb = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=vsb.set)
-        self.tree.pack(side="left", fill="both", expand=True)
-        vsb.pack(side="left", fill="y")
-
-        self.tree.bind("<<TreeviewSelect>>", self._on_select)
-
-        # ---- Right panel: form ----
-        right = tk.Frame(self, bg=CONTAINER_COLOR, padx=16, pady=16)
-        right.pack(side="left", fill="y", padx=(5, 10), pady=10)
-
-        tk.Label(right, text="Staff Details", font=FONT_LARGE, bg=CONTAINER_COLOR, fg=FG_COLOR).grid(
-            row=0, column=0, columnspan=2, pady=(0, 12), sticky="w"
-        )
-
-        self.entries = {}
-        fields = [
-            ("First Name *", "first_name"),
-            ("Last Name *", "last_name"),
-            ("Email *", "email"),
-            ("Phone (###-####) *", "phone"),
+        col_defs = [
+            ("ID", 5), ("Name", 20), ("Role", 12), ("Email", 24),
+            ("Phone", 12), ("Status", 8), ("Actions", 22),
         ]
-        for i, (label, key) in enumerate(fields, start=1):
-            tk.Label(right, text=label, bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
-                row=i, column=0, sticky="w", pady=4
-            )
-            e = tk.Entry(right, width=26)
-            e.grid(row=i, column=1, padx=8, pady=4)
-            self.entries[key] = e
+        hdr_frame = tk.Frame(table_container, bg="#d4ece3")
+        hdr_frame.pack(fill="x")
+        for col, width in col_defs:
+            tk.Label(hdr_frame, text=col, bg="#d4ece3", fg=TEXT,
+                     font=("Helvetica", 10, "bold"), width=width, anchor="w"
+                     ).pack(side="left", padx=6, pady=6)
 
-        # Role dropdown
-        r = len(fields) + 1
-        tk.Label(right, text="Role *", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
-            row=r, column=0, sticky="w", pady=4
+        scroll_body = tk.Frame(table_container, bg=BG_PANEL)
+        scroll_body.pack(fill="both", expand=True)
+
+        self._canvas = tk.Canvas(scroll_body, bg=BG_PANEL, highlightthickness=0)
+        vsb = ttk.Scrollbar(scroll_body, orient="vertical", command=self._canvas.yview)
+        self._scrollable = tk.Frame(self._canvas, bg=BG_PANEL)
+
+        self._scrollable.bind(
+            "<Configure>",
+            lambda e: self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         )
-        self.role_var = tk.StringVar()
-        self.role_combo = ttk.Combobox(right, textvariable=self.role_var, values=ROLES, width=24, state="readonly")
-        self.role_combo.grid(row=r, column=1, padx=8, pady=4)
-        self.role_combo.current(0)
-        r += 1
+        self._canvas.create_window((0, 0), window=self._scrollable, anchor="nw")
+        self._canvas.configure(yscrollcommand=vsb.set)
 
-        # Active flag
-        tk.Label(right, text="Active", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
-            row=r, column=0, sticky="w", pady=4
-        )
-        self.active_var = tk.IntVar(value=1)
-        tk.Checkbutton(right, variable=self.active_var, bg=CONTAINER_COLOR).grid(row=r, column=1, sticky="w", padx=8)
-        r += 1
+        self._canvas.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
 
-        # Clinic Assignments multi-select listbox
-        tk.Label(right, text="Clinic Assignments", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
-            row=r, column=0, sticky="nw", pady=(6, 0)
-        )
-        loc_frame = tk.Frame(right, bg=CONTAINER_COLOR)
-        loc_frame.grid(row=r, column=1, padx=8, pady=(6, 4), sticky="w")
-        self.loc_listbox = tk.Listbox(
-            loc_frame, selectmode="multiple", height=5, width=28,
-            exportselection=False, font=FONT_SMALL
-        )
-        loc_sb = ttk.Scrollbar(loc_frame, orient="vertical", command=self.loc_listbox.yview)
-        self.loc_listbox.configure(yscrollcommand=loc_sb.set)
-        self.loc_listbox.pack(side="left")
-        loc_sb.pack(side="left", fill="y")
-        tk.Label(right, text="(Ctrl+click to select multiple)",
-                 bg=CONTAINER_COLOR, fg="gray", font=("Arial", 8)).grid(
-            row=r + 1, column=1, padx=8, sticky="w"
-        )
-        r += 2
+        self._canvas.bind_all("<MouseWheel>", lambda e: self._canvas.yview_scroll(
+            int(-1 * (e.delta / 120)), "units"))
 
-        # Password fields
-        tk.Label(right, text="Password *", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
-            row=r, column=0, sticky="w", pady=4
-        )
-        self.pw_entry = tk.Entry(right, width=26, show="*")
-        self.pw_entry.grid(row=r, column=1, padx=8, pady=4)
-        r += 1
+    def _build_sidebar(self, parent):
+        sidebar = tk.Frame(parent, bg=BG_SIDEBAR, width=170)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
 
-        tk.Label(right, text="Confirm Password *", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
-            row=r, column=0, sticky="w", pady=4
-        )
-        self.pw_confirm_entry = tk.Entry(right, width=26, show="*")
-        self.pw_confirm_entry.grid(row=r, column=1, padx=8, pady=4)
-        r += 1
+        # Logo box
+        logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
+        logo_box.pack(fill="x", padx=10, pady=(12, 10))
+        tk.Label(logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8).pack(anchor="w")
 
-        tk.Label(right, text="Confirm Code *", bg=CONTAINER_COLOR, fg=FG_COLOR, anchor="w").grid(
-            row=r, column=0, sticky="w", pady=4
-        )
-        self.code_entry = tk.Entry(right, width=26, show="*")
-        self.code_entry.grid(row=r, column=1, padx=8, pady=4)
-        r += 1
+        # Nav items — Staff is the active page
+        nav_map = {
+            "Dashboard": "HomePage",
+            "Patient":   "PatientMenuPage",
+            "Staff":     None,              # current page
+            "Clinic":    "LocationMenuPage",
+            "Records":   "MedicalRecordsPage",
+            "Billing":   "BillingMenuPage",
+        }
+        for item, page in nav_map.items():
+            is_active = item == "Staff"
+            bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
 
-        self.pw_note = tk.Label(
-            right,
-            text="(Password fields required for Add only;\nleave blank on Update to keep existing)",
-            bg=CONTAINER_COLOR, fg="gray", font=("Arial", 9), justify="left"
-        )
-        self.pw_note.grid(row=r, column=0, columnspan=2, sticky="w", pady=(0, 8))
-        r += 1
+            def make_cmd(p=page):
+                if p and self.controller:
+                    return lambda: self.controller.show_frame(p)
+                return None
 
-        # Action buttons
-        btn_frame = tk.Frame(right, bg=CONTAINER_COLOR)
-        btn_frame.grid(row=r, column=0, columnspan=2, pady=(8, 0))
+            cmd = make_cmd()
+            if cmd:
+                btn = tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
+                                anchor="w", padx=10, pady=6, relief="flat",
+                                activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
+                                command=cmd)
+            else:
+                btn = tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
+                               anchor="w", padx=10, pady=6)
+            btn.pack(fill="x", padx=10, pady=2)
 
-        tk.Button(
-            btn_frame, text="Add Staff",
-            font=FONT_SMALL, bg=BTN_GREEN, fg="white",
-            width=13, height=2, relief="flat",
-            command=self._add_staff
-        ).pack(side="left", padx=4)
-
-        tk.Button(
-            btn_frame, text="Update Staff",
-            font=FONT_SMALL, bg=BTN_BLUE, fg="white",
-            width=13, height=2, relief="flat",
-            command=self._update_staff
-        ).pack(side="left", padx=4)
-
-        tk.Button(
-            btn_frame, text="Deactivate Staff",
-            font=FONT_SMALL, bg="#FF9800", fg="white",
-            width=13, height=2, relief="flat",
-            command=self._remove_staff
-        ).pack(side="left", padx=4)
-
-        tk.Button(
-            btn_frame, text="Delete Staff",
-            font=FONT_SMALL, bg=BTN_RED, fg="white",
-            width=13, height=2, relief="flat",
-            command=self._delete_staff
-        ).pack(side="left", padx=4)
-
-        tk.Button(
-            btn_frame, text="Clear Form",
-            font=FONT_SMALL, bg=BTN_GRAY, fg="#222",
-            width=10, height=2, relief="flat",
-            command=self._clear_form
-        ).pack(side="left", padx=4)
-
-        # Status bar
-        self.status_var = tk.StringVar(value="Select a staff member or fill in the form to add.")
-        tk.Label(right, textvariable=self.status_var, bg=CONTAINER_COLOR, fg="gray",
-                 font=("Arial", 9), wraplength=340, justify="left").grid(
-            row=r + 1, column=0, columnspan=2, sticky="w", pady=(8, 0)
-        )
-
-        self._selected_staff_id = None
+        # Signed-in label at bottom
+        tk.Label(sidebar, text="Signed in as:\nAdmin", bg=BG_SIDEBAR, fg=TEXT,
+                 font=("Helvetica", 9), justify="left"
+                 ).pack(side="bottom", anchor="w", padx=10, pady=12)
 
     # --------------------------------------------------------- Data loading --
     def _load_locations(self):
@@ -229,11 +192,9 @@ class StaffManagementFrame(tk.Frame):
             ).fetchall()
             conn.close()
             self.location_list.clear()
-            self.loc_listbox.delete(0, tk.END)
             for loc_id, name, status in rows:
                 label = f"{name}  (ID {loc_id})" + (f" [{status}]" if status else "")
                 self.location_list.append((label, loc_id))
-                self.loc_listbox.insert(tk.END, label)
         except sqlite3.Error as e:
             messagebox.showerror("DB Error", str(e))
 
@@ -250,25 +211,76 @@ class StaffManagementFrame(tk.Frame):
                    GROUP BY s.staff_id
                    ORDER BY s.last_name, s.first_name"""
             ).fetchall()
+            total = conn.execute("SELECT COUNT(*) FROM Staff").fetchone()[0]
+            active = conn.execute("SELECT COUNT(*) FROM Staff WHERE active_flag=1").fetchone()[0]
             conn.close()
             self._all_rows = rows
+            self._total_var.set(str(total))
+            self._active_var.set(str(active))
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", f"Could not load staff.\n\n{e}")
-        self._populate_tree(self._all_rows)
+        self._populate_table(self._all_rows)
 
-    def _populate_tree(self, rows):
-        self.tree.delete(*self.tree.get_children())
+    def _populate_table(self, rows):
+        for widget in self._scrollable.winfo_children():
+            widget.destroy()
         for row in rows:
             sid, fn, ln, email, phone, role, active, locations = row
-            self.tree.insert("", "end", iid=str(sid), values=(
-                sid, f"{fn} {ln}", role, email or "", phone or "",
-                "Yes" if active else "No", locations
-            ))
+            self._build_table_row(self._scrollable, {
+                "id": sid,
+                "name": f"{fn} {ln}",
+                "role": role or "",
+                "email": email or "",
+                "phone": phone or "",
+                "status": "Active" if active else "Inactive",
+            })
+        if not rows:
+            tk.Label(self._scrollable, text="No staff records found.",
+                     bg=BG_PANEL, fg="gray", font=FONT_SMALL
+                     ).pack(pady=20)
+
+    def _build_table_row(self, parent, row):
+        bg = BG_PANEL
+        row_frame = tk.Frame(parent, bg=bg, pady=4)
+        row_frame.pack(fill="x", padx=4)
+        # Separator line
+        tk.Frame(parent, bg="#e0e0e0", height=1).pack(fill="x")
+
+        col_widths = [5, 20, 12, 24, 12, 8]
+        col_keys = ["id", "name", "role", "email", "phone", "status"]
+        for key, width in zip(col_keys, col_widths):
+            val = str(row.get(key, ""))
+            fg = TEXT
+            if key == "status":
+                fg = ACCENT if val == "Active" else "#e53935"
+            tk.Label(row_frame, text=val, bg=bg, fg=fg,
+                     font=FONT_TABLE, width=width, anchor="w"
+                     ).pack(side="left", padx=6)
+
+        # Action buttons
+        action_frame = tk.Frame(row_frame, bg=bg)
+        action_frame.pack(side="left", padx=6)
+        sid = row["id"]
+        tk.Button(
+            action_frame, text="Edit", font=FONT_SMALL,
+            bg=ACCENT, fg="white", relief="flat", padx=6,
+            command=lambda i=sid: self._open_edit_dialog(i)
+        ).pack(side="left", padx=2)
+        tk.Button(
+            action_frame, text="Deactivate", font=FONT_SMALL,
+            bg=BTN_ORANGE, fg="white", relief="flat", padx=6,
+            command=lambda i=sid: self._deactivate_staff(i)
+        ).pack(side="left", padx=2)
+        tk.Button(
+            action_frame, text="Delete", font=FONT_SMALL,
+            bg=BTN_RED, fg="white", relief="flat", padx=6,
+            command=lambda i=sid: self._delete_staff(i)
+        ).pack(side="left", padx=2)
 
     def _filter_staff(self):
         term = self.search_var.get().lower()
         if not term:
-            self._populate_tree(self._all_rows)
+            self._populate_table(self._all_rows)
             return
         filtered = [
             r for r in self._all_rows
@@ -277,14 +289,165 @@ class StaffManagementFrame(tk.Frame):
             or term in (r[5] or "").lower()
             or term in (r[7] or "").lower()
         ]
-        self._populate_tree(filtered)
+        self._populate_table(filtered)
 
-    def _on_select(self, _=None):
-        sel = self.tree.selection()
-        if not sel:
-            return
-        staff_id = int(sel[0])
-        self._selected_staff_id = staff_id
+    # ----------------------------------------------------------- Dialogs --
+    def _make_dialog(self, title):
+        dlg = tk.Toplevel(self)
+        dlg.title(title)
+        dlg.configure(bg=BG_LIGHT)
+        dlg.grab_set()
+        dlg.resizable(False, False)
+
+        # Colored header bar
+        hdr = tk.Frame(dlg, bg=ACCENT)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text=title, bg=ACCENT, fg="white",
+                 font=("Helvetica", 14, "bold"), padx=20, pady=14).pack(side="left")
+
+        return dlg
+
+    def _field(self, parent, label, row, col=0, show=None, width=22):
+        """Helper: renders a label + styled entry, returns the Entry widget."""
+        tk.Label(parent, text=label, bg=BG_PANEL, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), anchor="w"
+                 ).grid(row=row * 2, column=col, sticky="w", padx=16, pady=(10, 2))
+        e = tk.Entry(parent, width=width, font=FONT_SMALL, bd=1, relief="solid",
+                     bg="white", fg=TEXT, insertbackground=TEXT, show=show or "")
+        e.grid(row=row * 2 + 1, column=col, sticky="ew", padx=16, pady=(0, 4))
+        return e
+
+    def _build_form_fields(self, dlg):
+        """Build the shared form fields inside a dialog."""
+        # White card body
+        card = tk.Frame(dlg, bg=BG_PANEL, padx=4, pady=4)
+        card.pack(fill="both", expand=True, padx=16, pady=(16, 8))
+        card.columnconfigure(0, weight=1)
+        card.columnconfigure(1, weight=1)
+
+        # ---- Left column: personal info ----
+        entries = {}
+        left_fields = [
+            ("First Name *",        "first_name"),
+            ("Last Name *",         "last_name"),
+            ("Email *",             "email"),
+            ("Phone (###-####) *",  "phone"),
+        ]
+        for i, (lbl, key) in enumerate(left_fields):
+            entries[key] = self._field(card, lbl, i, col=0)
+
+        # Role
+        tk.Label(card, text="Role *", bg=BG_PANEL, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), anchor="w"
+                 ).grid(row=8, column=0, sticky="w", padx=16, pady=(10, 2))
+        role_var = tk.StringVar()
+        role_combo = ttk.Combobox(card, textvariable=role_var, values=ROLES, width=20, state="readonly")
+        role_combo.grid(row=9, column=0, sticky="ew", padx=16, pady=(0, 4))
+        role_combo.current(0)
+
+        # Active checkbox
+        tk.Label(card, text="Active", bg=BG_PANEL, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), anchor="w"
+                 ).grid(row=10, column=0, sticky="w", padx=16, pady=(10, 2))
+        active_var = tk.IntVar(value=1)
+        tk.Checkbutton(card, variable=active_var, bg=BG_PANEL,
+                       activebackground=BG_PANEL
+                       ).grid(row=11, column=0, sticky="w", padx=14)
+
+        # ---- Right column: clinic + security ----
+        tk.Label(card, text="Clinic Assignments", bg=BG_PANEL, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), anchor="w"
+                 ).grid(row=0, column=1, sticky="w", padx=16, pady=(10, 2))
+        loc_outer = tk.Frame(card, bg=BG_PANEL)
+        loc_outer.grid(row=1, column=1, rowspan=5, sticky="nsew", padx=16, pady=(0, 4))
+        loc_listbox = tk.Listbox(loc_outer, selectmode="multiple", height=7, width=28,
+                                  exportselection=False, font=FONT_SMALL,
+                                  bd=1, relief="solid", bg="white", fg=TEXT,
+                                  selectbackground=ACCENT, selectforeground="white")
+        loc_sb = ttk.Scrollbar(loc_outer, orient="vertical", command=loc_listbox.yview)
+        loc_listbox.configure(yscrollcommand=loc_sb.set)
+        loc_listbox.pack(side="left", fill="both", expand=True)
+        loc_sb.pack(side="left", fill="y")
+        for label, _ in self.location_list:
+            loc_listbox.insert(tk.END, label)
+        tk.Label(card, text="Ctrl+click to select multiple", bg=BG_PANEL, fg="gray",
+                 font=("Helvetica", 8)
+                 ).grid(row=6, column=1, sticky="w", padx=16)
+
+        pw_entry         = self._field(card, "Password *",         4, col=1, show="*")
+        pw_confirm_entry = self._field(card, "Confirm Password *", 5, col=1, show="*")
+        code_entry       = self._field(card, "Confirmation Code *",6, col=1, show="*")
+
+        tk.Label(card, text="Leave password blank on Edit to keep existing.",
+                 bg=BG_PANEL, fg="gray", font=("Helvetica", 8)
+                 ).grid(row=14, column=1, sticky="w", padx=16, pady=(0, 8))
+
+        return card, entries, role_var, active_var, loc_listbox, pw_entry, pw_confirm_entry, code_entry
+
+    def _dialog_footer(self, dlg, primary_text, primary_cmd):
+        """Renders a styled footer bar with a primary action button and Cancel."""
+        footer = tk.Frame(dlg, bg="#f0f0f0", bd=0)
+        footer.pack(fill="x", padx=0, pady=0, side="bottom")
+        tk.Frame(footer, bg="#d0d0d0", height=1).pack(fill="x")
+        btn_row = tk.Frame(footer, bg="#f0f0f0")
+        btn_row.pack(anchor="e", padx=16, pady=10)
+        tk.Button(btn_row, text="Cancel", font=FONT_SMALL, bg="#e0e0e0", fg=TEXT,
+                  relief="flat", padx=14, pady=7, cursor="hand2",
+                  command=dlg.destroy).pack(side="left", padx=(0, 8))
+        tk.Button(btn_row, text=primary_text, font=("Helvetica", 10, "bold"),
+                  bg=ACCENT, fg="white", relief="flat", padx=14, pady=7, cursor="hand2",
+                  command=primary_cmd).pack(side="left")
+
+    def _open_add_dialog(self):
+        dlg = self._make_dialog("Add Staff Member")
+        _, entries, role_var, active_var, loc_listbox, pw_entry, pw_confirm_entry, code_entry = \
+            self._build_form_fields(dlg)
+
+        def save():
+            data = {k: v.get().strip() for k, v in entries.items()}
+            data["role"] = role_var.get().strip()
+            data["active"] = active_var.get()
+            data["password"] = pw_entry.get()
+            data["confirm_password"] = pw_confirm_entry.get()
+            data["code"] = code_entry.get().strip()
+            if not self._validate_base(data):
+                return
+            if len(data["password"]) < 8:
+                messagebox.showerror("Weak Password", "Password must be at least 8 characters.", parent=dlg)
+                return
+            if data["password"] != data["confirm_password"]:
+                messagebox.showerror("Password Mismatch", "Passwords do not match.", parent=dlg)
+                return
+            if data["code"] != CONFIRMATION_CODE:
+                messagebox.showerror("Invalid Code", "Invalid staff confirmation code.", parent=dlg)
+                return
+            pw_hash = hash_password(data["password"])
+            selected_locs = [self.location_list[i][1] for i in loc_listbox.curselection()]
+            try:
+                conn = sqlite3.connect(DB_NAME)
+                cur = conn.execute(
+                    "INSERT INTO Staff (first_name, last_name, email, phone, role, active_flag, password_hash) VALUES (?,?,?,?,?,?,?)",
+                    (data["first_name"], data["last_name"], data["email"], data["phone"],
+                     data["role"], data["active"], pw_hash)
+                )
+                new_id = cur.lastrowid
+                for loc_id in selected_locs:
+                    conn.execute(
+                        "INSERT INTO StaffLocationAssignment (staff_id, location_id, assignment_role, start_date) VALUES (?,?,?,date('now'))",
+                        (new_id, loc_id, data["role"])
+                    )
+                conn.commit()
+                conn.close()
+            except sqlite3.Error as e:
+                messagebox.showerror("Database Error", f"Could not add staff.\n\n{e}", parent=dlg)
+                return
+            messagebox.showinfo("Success", f"Staff member {data['first_name']} {data['last_name']} added.", parent=dlg)
+            dlg.destroy()
+            self._load_staff()
+
+        self._dialog_footer(dlg, "Add Staff", save)
+
+    def _open_edit_dialog(self, staff_id):
         try:
             conn = sqlite3.connect(DB_NAME)
             row = conn.execute(
@@ -301,40 +464,126 @@ class StaffManagementFrame(tk.Frame):
             return
         if not row:
             return
-        fn, ln, email, phone, role, active = row
-        self.entries["first_name"].delete(0, tk.END); self.entries["first_name"].insert(0, fn or "")
-        self.entries["last_name"].delete(0, tk.END);  self.entries["last_name"].insert(0, ln or "")
-        self.entries["email"].delete(0, tk.END);      self.entries["email"].insert(0, email or "")
-        self.entries["phone"].delete(0, tk.END);      self.entries["phone"].insert(0, phone or "")
-        if role in ROLES:
-            self.role_combo.set(role)
-        else:
-            self.role_combo.current(0)
-        self.active_var.set(1 if active else 0)
-        self.pw_entry.delete(0, tk.END)
-        self.pw_confirm_entry.delete(0, tk.END)
-        self.code_entry.delete(0, tk.END)
 
-        # Highlight assigned locations in listbox
-        self.loc_listbox.selection_clear(0, tk.END)
+        fn, ln, email, phone, role, active = row
+        dlg = self._make_dialog(f"Edit Staff — {fn} {ln}")
+        _, entries, role_var, active_var, loc_listbox, pw_entry, pw_confirm_entry, code_entry = \
+            self._build_form_fields(dlg)
+
+        # Pre-populate fields
+        entries["first_name"].insert(0, fn or "")
+        entries["last_name"].insert(0, ln or "")
+        entries["email"].insert(0, email or "")
+        entries["phone"].insert(0, phone or "")
+        if role in ROLES:
+            role_var.set(role)
+        active_var.set(1 if active else 0)
         for i, (_, loc_id) in enumerate(self.location_list):
             if loc_id in assigned_ids:
-                self.loc_listbox.selection_set(i)
+                loc_listbox.selection_set(i)
 
-        self.status_var.set(f"Loaded staff ID {staff_id}. Edit fields then click Update, Deactivate, or Delete.")
+        def save():
+            data = {k: v.get().strip() for k, v in entries.items()}
+            data["role"] = role_var.get().strip()
+            data["active"] = active_var.get()
+            data["password"] = pw_entry.get()
+            data["confirm_password"] = pw_confirm_entry.get()
+            data["code"] = code_entry.get().strip()
+            if not self._validate_base(data):
+                return
+            new_loc_ids = set(self.location_list[i][1] for i in loc_listbox.curselection())
+            pw = data["password"]
+            if pw or data["confirm_password"]:
+                if len(pw) < 8:
+                    messagebox.showerror("Weak Password", "Password must be at least 8 characters.", parent=dlg)
+                    return
+                if pw != data["confirm_password"]:
+                    messagebox.showerror("Password Mismatch", "Passwords do not match.", parent=dlg)
+                    return
+                if data["code"] != CONFIRMATION_CODE:
+                    messagebox.showerror("Invalid Code", "Invalid staff confirmation code.", parent=dlg)
+                    return
+                pw_hash = hash_password(pw)
+                sql = "UPDATE Staff SET first_name=?, last_name=?, email=?, phone=?, role=?, active_flag=?, password_hash=? WHERE staff_id=?"
+                params = (data["first_name"], data["last_name"], data["email"], data["phone"],
+                          data["role"], data["active"], pw_hash, staff_id)
+            else:
+                sql = "UPDATE Staff SET first_name=?, last_name=?, email=?, phone=?, role=?, active_flag=? WHERE staff_id=?"
+                params = (data["first_name"], data["last_name"], data["email"], data["phone"],
+                          data["role"], data["active"], staff_id)
+            try:
+                conn = sqlite3.connect(DB_NAME)
+                conn.execute(sql, params)
+                current_locs = {r[0] for r in conn.execute(
+                    "SELECT location_id FROM StaffLocationAssignment WHERE staff_id=? AND end_date IS NULL",
+                    (staff_id,)
+                ).fetchall()}
+                for loc_id in new_loc_ids - current_locs:
+                    conn.execute(
+                        "INSERT INTO StaffLocationAssignment (staff_id, location_id, assignment_role, start_date) VALUES (?,?,?,date('now'))",
+                        (staff_id, loc_id, data["role"])
+                    )
+                for loc_id in current_locs - new_loc_ids:
+                    conn.execute(
+                        "UPDATE StaffLocationAssignment SET end_date=date('now') WHERE staff_id=? AND location_id=? AND end_date IS NULL",
+                        (staff_id, loc_id)
+                    )
+                conn.commit()
+                conn.close()
+            except sqlite3.Error as e:
+                messagebox.showerror("Database Error", f"Could not update staff.\n\n{e}", parent=dlg)
+                return
+            messagebox.showinfo("Success", "Staff information updated.", parent=dlg)
+            dlg.destroy()
+            self._load_staff()
 
-    # ----------------------------------------------------------- Validation --
-    def _collect_form(self):
-        data = {k: v.get().strip() for k, v in self.entries.items()}
-        data["role"] = self.role_var.get().strip()
-        data["active"] = self.active_var.get()
-        data["password"] = self.pw_entry.get()
-        data["confirm_password"] = self.pw_confirm_entry.get()
-        data["code"] = self.code_entry.get().strip()
-        return data
+        self._dialog_footer(dlg, "Save Changes", save)
 
-    def _get_selected_loc_ids(self):
-        return [self.location_list[i][1] for i in self.loc_listbox.curselection()]
+    # --------------------------------------------------------- CRUD actions --
+    def _deactivate_staff(self, staff_id):
+        name = self._get_name(staff_id)
+        if not messagebox.askyesno("Confirm Deactivate",
+                                   f"Deactivate {name}? They will remain in the database but marked inactive."):
+            return
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            conn.execute("UPDATE Staff SET active_flag=0 WHERE staff_id=?", (staff_id,))
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Could not deactivate staff.\n\n{e}")
+            return
+        messagebox.showinfo("Deactivated", f"{name} has been deactivated.")
+        self._load_staff()
+
+    def _delete_staff(self, staff_id):
+        name = self._get_name(staff_id)
+        if not messagebox.askyesno("Confirm Delete",
+                                   f"Permanently delete {name}? This cannot be undone."):
+            return
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            conn.execute("DELETE FROM StaffLocationAssignment WHERE staff_id=?", (staff_id,))
+            conn.execute("DELETE FROM Staff WHERE staff_id=?", (staff_id,))
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Could not delete staff.\n\n{e}")
+            return
+        messagebox.showinfo("Deleted", f"{name} has been permanently deleted.")
+        self._load_staff()
+
+    # ------------------------------------------------------------ Helpers --
+    def _get_name(self, staff_id):
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            row = conn.execute(
+                "SELECT first_name, last_name FROM Staff WHERE staff_id=?", (staff_id,)
+            ).fetchone()
+            conn.close()
+            return f"{row[0]} {row[1]}" if row else f"ID {staff_id}"
+        except sqlite3.Error:
+            return f"ID {staff_id}"
 
     def _validate_base(self, data):
         required = ["first_name", "last_name", "email", "phone", "role"]
@@ -349,157 +598,3 @@ class StaffManagementFrame(tk.Frame):
             messagebox.showerror("Invalid Phone", "Phone must be ###-#### (e.g. 555-1234).")
             return False
         return True
-
-    # --------------------------------------------------------- CRUD actions --
-    def _add_staff(self):
-        data = self._collect_form()
-        if not self._validate_base(data):
-            return
-        if len(data["password"]) < 8:
-            messagebox.showerror("Weak Password", "Password must be at least 8 characters.")
-            return
-        if data["password"] != data["confirm_password"]:
-            messagebox.showerror("Password Mismatch", "Passwords do not match.")
-            return
-        if data["code"] != CONFIRMATION_CODE:
-            messagebox.showerror("Invalid Code", "Invalid staff confirmation code.")
-            return
-        pw_hash = hash_password(data["password"])
-        selected_locs = self._get_selected_loc_ids()
-        try:
-            conn = sqlite3.connect(DB_NAME)
-            cur = conn.execute(
-                "INSERT INTO Staff (first_name, last_name, email, phone, role, active_flag, password_hash) VALUES (?,?,?,?,?,?,?)",
-                (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], pw_hash)
-            )
-            new_id = cur.lastrowid
-            for loc_id in selected_locs:
-                conn.execute(
-                    "INSERT INTO StaffLocationAssignment (staff_id, location_id, assignment_role, start_date) VALUES (?,?,?,date('now'))",
-                    (new_id, loc_id, data["role"])
-                )
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            messagebox.showerror("Database Error", f"Could not add staff.\n\n{e}")
-            return
-        messagebox.showinfo("Success", f"Staff member {data['first_name']} {data['last_name']} added.")
-        self._clear_form()
-        self._load_staff()
-
-    def _update_staff(self):
-        if not self._selected_staff_id:
-            messagebox.showwarning("No Selection", "Select a staff member from the list first.")
-            return
-        data = self._collect_form()
-        if not self._validate_base(data):
-            return
-        new_loc_ids = set(self._get_selected_loc_ids())
-        pw = data["password"]
-        if pw or data["confirm_password"]:
-            if len(pw) < 8:
-                messagebox.showerror("Weak Password", "Password must be at least 8 characters.")
-                return
-            if pw != data["confirm_password"]:
-                messagebox.showerror("Password Mismatch", "Passwords do not match.")
-                return
-            if data["code"] != CONFIRMATION_CODE:
-                messagebox.showerror("Invalid Code", "Invalid staff confirmation code.")
-                return
-            pw_hash = hash_password(pw)
-            sql = "UPDATE Staff SET first_name=?, last_name=?, email=?, phone=?, role=?, active_flag=?, password_hash=? WHERE staff_id=?"
-            params = (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], pw_hash, self._selected_staff_id)
-        else:
-            sql = "UPDATE Staff SET first_name=?, last_name=?, email=?, phone=?, role=?, active_flag=? WHERE staff_id=?"
-            params = (data["first_name"], data["last_name"], data["email"], data["phone"], data["role"], data["active"], self._selected_staff_id)
-        try:
-            conn = sqlite3.connect(DB_NAME)
-            conn.execute(sql, params)
-            # Sync clinic assignments
-            current_locs = {r[0] for r in conn.execute(
-                "SELECT location_id FROM StaffLocationAssignment WHERE staff_id=? AND end_date IS NULL",
-                (self._selected_staff_id,)
-            ).fetchall()}
-            for loc_id in new_loc_ids - current_locs:
-                conn.execute(
-                    "INSERT INTO StaffLocationAssignment (staff_id, location_id, assignment_role, start_date) VALUES (?,?,?,date('now'))",
-                    (self._selected_staff_id, loc_id, data["role"])
-                )
-            for loc_id in current_locs - new_loc_ids:
-                conn.execute(
-                    "UPDATE StaffLocationAssignment SET end_date=date('now') WHERE staff_id=? AND location_id=? AND end_date IS NULL",
-                    (self._selected_staff_id, loc_id)
-                )
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            messagebox.showerror("Database Error", f"Could not update staff.\n\n{e}")
-            return
-        messagebox.showinfo("Success", "Staff information updated.")
-        self._load_staff()
-
-    def _remove_staff(self):
-        """Soft delete — sets active_flag = 0, keeps the record and assignments in the DB."""
-        if not self._selected_staff_id:
-            messagebox.showwarning("No Selection", "Select a staff member from the list first.")
-            return
-        name = self._get_selected_name()
-        if not messagebox.askyesno("Confirm Deactivate", f"Deactivate {name}? They will remain in the database but marked inactive."):
-            return
-        try:
-            conn = sqlite3.connect(DB_NAME)
-            conn.execute("UPDATE Staff SET active_flag=0 WHERE staff_id=?", (self._selected_staff_id,))
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            messagebox.showerror("Database Error", f"Could not deactivate staff.\n\n{e}")
-            return
-        messagebox.showinfo("Deactivated", f"{name} has been deactivated.")
-        self._clear_form()
-        self._load_staff()
-
-    def _delete_staff(self):
-        """Permanently deletes the staff record and all clinic assignments."""
-        if not self._selected_staff_id:
-            messagebox.showwarning("No Selection", "Select a staff member from the list first.")
-            return
-        name = self._get_selected_name()
-        if not messagebox.askyesno("Confirm Delete", f"Permanently delete {name}? This cannot be undone."):
-            return
-        try:
-            conn = sqlite3.connect(DB_NAME)
-            conn.execute("DELETE FROM StaffLocationAssignment WHERE staff_id=?", (self._selected_staff_id,))
-            conn.execute("DELETE FROM Staff WHERE staff_id=?", (self._selected_staff_id,))
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            messagebox.showerror("Database Error", f"Could not delete staff.\n\n{e}")
-            return
-        messagebox.showinfo("Deleted", f"{name} has been permanently deleted.")
-        self._clear_form()
-        self._load_staff()
-
-    # ------------------------------------------------------------ Helpers --
-    def _get_selected_name(self):
-        try:
-            conn = sqlite3.connect(DB_NAME)
-            row = conn.execute(
-                "SELECT first_name, last_name FROM Staff WHERE staff_id=?", (self._selected_staff_id,)
-            ).fetchone()
-            conn.close()
-            return f"{row[0]} {row[1]}" if row else f"ID {self._selected_staff_id}"
-        except sqlite3.Error:
-            return f"ID {self._selected_staff_id}"
-
-    def _clear_form(self):
-        for e in self.entries.values():
-            e.delete(0, tk.END)
-        self.role_combo.current(0)
-        self.active_var.set(1)
-        self.pw_entry.delete(0, tk.END)
-        self.pw_confirm_entry.delete(0, tk.END)
-        self.code_entry.delete(0, tk.END)
-        self.loc_listbox.selection_clear(0, tk.END)
-        self._selected_staff_id = None
-        self.tree.selection_remove(self.tree.selection())
-        self.status_var.set("Form cleared. Select a staff member or fill in the form to add.")
