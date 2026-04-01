@@ -1,54 +1,116 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-import sqlite3
-import os
 import hashlib
+from tkinter import ttk, filedialog, messagebox
+import os
+import shutil
+import sqlite3
+from datetime import datetime
+from typing import Dict, List, Tuple, Optional
 
 DB_NAME = "healthcare.db"
 
-BG_COLOR = "#dddede"
-FG_COLOR = "#222"
-BTN_GREEN = "#4CAF50"
-BTN_BLUE = "#2196F3"
-BTN_GRAY = "#e0e0e0"
-BTN_RED = "#e53935"
-CONTAINER_COLOR = "#f2efef"
-FONT_LARGE = ("Arial", 16, "bold")
-FONT_MEDIUM = ("Arial", 12)
-FONT_SMALL = ("Arial", 11)
+BG_LIGHT        = "#e6f2ec"
+BG_SIDEBAR      = "#5FAF90"
+BG_SIDEBAR_LIGHT= "#A2DDC6"
+BG_PANEL        = "#ffffff"
+ACCENT          = "#308684"
+CARD_BG         = "#f7fff7"
+TEXT            = "#0b3d2e"
+BTN_DANGER      = "#c0392b"
+BTN_SAFE        = "#308684"
+BTN_INFO        = "#2980b9"
+
+SIDEBAR_WIDTH = 160
+FONT_TITLE    = ("Helvetica", 18, "bold")
+FONT_HEADER   = ("Helvetica", 13, "bold")
+FONT_TABLE    = ("Helvetica", 10)
+FONT_NAV      = ("Helvetica", 10)
+FONT_LOGO     = ("Helvetica", 13, "bold")
 
 
 
 class PatientManagementFrame(tk.Frame):
     def __init__(self, parent=None):
-        super().__init__(parent, bg=BG_COLOR)
+        super().__init__(parent, bg=BG_LIGHT)
         self._selected_patient_id = None
         self._build_ui()
         self._load_patients()
 
     # ---------------- UI ----------------
     def _build_ui(self):
-        left = tk.Frame(self, bg=BG_COLOR)
-        left.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        #left = tk.Frame(self, bg=BG_COLOR)
+        #left.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
-        tk.Label(left, text="Patients", font=FONT_LARGE, bg=BG_COLOR).pack(anchor="w")
+        outer = tk.Frame(self, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=12, pady=12)
+
+        left = tk.Frame(outer, bg=BG_PANEL, bd=1, relief="solid")
+        left.pack(side="left", fill="both", expand=True, padx=(0,10), pady=0)
+
+        #tk.Label(left, text="Patients", font=FONT_LARGE, bg=BG_COLOR).pack(anchor="w")
+
+        tk.Label(left, text="Patients", font=FONT_TITLE, bg=BG_PANEL, fg=TEXT).pack(anchor="w", padx=14, pady=(10,0))
+
+
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure("CareFlow.Treeview",
+            background=CARD_BG,
+            fieldbackground=CARD_BG,
+            foreground=TEXT,
+            rowheight=28,
+            font=FONT_TABLE
+        )
+
+        style.configure("CareFlow.Treeview.Heading",
+            background="#A2DDC6",
+            foreground=TEXT,
+            font=("Helvetica", 10, "bold"),
+            relief="flat"
+        )
+
+        style.map("CareFlow.Treeview",
+            background=[("selected", "#5FAF90")],
+            foreground=[("selected", TEXT)]
+        )
+
 
         cols = ("ID", "Name", "Phone", "Email")
-        self.tree = ttk.Treeview(left, columns=cols, show="headings")
+        #self.tree = ttk.Treeview(left, columns=cols, show="headings")
+        self.tree = ttk.Treeview(left, columns=cols, show="headings", style="CareFlow.Treeview")
 
-        for col in cols:
-            self.tree.heading(col, text=col)
+        #for col in cols:
+            #self.tree.heading(col, text=col)
 
-        self.tree.pack(fill="both", expand=True)
+        col_config = {
+            "ID": ("ID", 60, "center"),
+            "Name": ("Name", 180, "w"),
+            "Phone": ("Phone", 120, "center"),
+            "Email": ("Email", 200, "w"),
+        }
+
+        for col, (text, width, anchor) in col_config.items():
+            self.tree.heading(col, text=text)
+            self.tree.column(col, width=width, anchor=anchor)
+
+        tree_frame = tk.Frame(left, bg=BG_PANEL)
+        tree_frame.pack(fill="both", expand=True, padx=10, pady=8) 
+
+        self.tree.pack(fill="both", expand=True, padx=10, pady=10)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
         self.tree.tag_configure("inactive", foreground="gray")
 
         # ---------- RIGHT FORM ----------
-        right = tk.Frame(self, bg=CONTAINER_COLOR, padx=15, pady=15)
-        right.pack(side="left", fill="y", padx=10, pady=10)
+        #right = tk.Frame(self, bg=CONTAINER_COLOR, padx=15, pady=15)
+        right = tk.Frame(outer, bg=BG_PANEL, padx=15, pady=15, bd=1, relief="solid")
+        right.pack(side="left", fill="y")
+        #right.pack(side="left", fill="y", padx=10, pady=10)
 
-        tk.Label(right, text="Patient Details", font=FONT_LARGE, bg=CONTAINER_COLOR).grid(row=0, column=0, columnspan=2)
+        #tk.Label(right, text="Patient Details", font=FONT_LARGE, bg=CONTAINER_COLOR).grid(row=0, column=0, columnspan=2)
+        tk.Label(right, text="Patient Details", font=FONT_HEADER, bg=BG_PANEL, fg=TEXT).grid(row=0, column=0, columnspan=2, pady=(0,10))
 
         self.entries = {}
         fields = [
@@ -67,29 +129,39 @@ class PatientManagementFrame(tk.Frame):
         ]
 
         for i, (label, key) in enumerate(fields, start=1):
-            tk.Label(right, text=label, bg=CONTAINER_COLOR).grid(row=i, column=0, sticky="w")
-            e = tk.Entry(right, width=25)
-            e.grid(row=i, column=1, pady=2)
+            tk.Label(right, text=label, bg=BG_PANEL).grid(row=i, column=0, sticky="w")
+            #e = tk.Entry(right, width=25)
+            e = tk.Entry(right, width=25, bg=CARD_BG, fg=TEXT, relief="flat")
+            e.grid(row=i, column=1, pady=4, padx=(6,0))
             self.entries[key] = e
 
         # Buttons
-        btn_frame = tk.Frame(right, bg=CONTAINER_COLOR)
-        btn_frame.grid(row=len(fields) + 1, column=0, columnspan=2, pady=10)
+        btn_cfg = dict(
+            relief="flat",
+            fg="white",
+            padx=12,
+            pady=6,
+            font=("Helvetica", 10, "bold"),
+            cursor="hand2"
+        )
 
-        tk.Button(btn_frame, text="Add Patient", bg=BTN_GREEN, fg="white",
-                  command=self._add_patient).pack(side="left", padx=4)
+        btn_frame = tk.Frame(right, bg=BG_PANEL)
+        btn_frame.grid(row=len(fields) + 1, column=0, columnspan=2, pady=(12,0))
 
-        tk.Button(btn_frame, text="Update Patient", bg=BTN_BLUE, fg="white",
-                  command=self._update_patient).pack(side="left", padx=4)
+        tk.Button(btn_frame, text="Add", bg=BTN_SAFE,
+                command=self._add_patient, **btn_cfg).pack(side="left", padx=4)
 
-        tk.Button(btn_frame, text="Remove Patient", bg="#FF9800", fg="white",
-                  command=self.soft_delete_patient).pack(side="left", padx=4)
+        tk.Button(btn_frame, text="Update", bg=BTN_INFO,
+                command=self._update_patient, **btn_cfg).pack(side="left", padx=4)
 
-        tk.Button(btn_frame, text="Delete Patient", bg=BTN_RED, fg="white",
-                  command=self._delete_patient).pack(side="left", padx=4)
+        tk.Button(btn_frame, text="Deactivate", bg="#f39c12",
+                command=self.soft_delete_patient, **btn_cfg).pack(side="left", padx=4)
 
-        tk.Button(btn_frame, text="Clear", bg=BTN_GRAY,
-                  command=self._clear_form).pack(side="left", padx=4)
+        tk.Button(btn_frame, text="Delete", bg=BTN_DANGER,
+                command=self._delete_patient, **btn_cfg).pack(side="left", padx=4)
+
+        tk.Button(btn_frame, text="Clear", bg="#95a5a6",
+                command=self._clear_form, **btn_cfg).pack(side="left", padx=4)
 
     # ---------------- LOAD ----------------
     def _load_patients(self):
