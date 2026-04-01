@@ -8,7 +8,6 @@ from datetime import datetime
 
 DB_NAME = "healthcare.db"
 
-# --- Dashboard style palette ---
 BG_LIGHT = "#e6f2ec"
 BG_SIDEBAR = "#5FAF90"
 BG_SIDEBAR_LIGHT = "#A2DDC6"
@@ -109,14 +108,7 @@ class BillingFrame(tk.Frame):
     def _sidebar_button(self, parent, text, active=False):
         bg = BG_SIDEBAR_LIGHT if active else BG_SIDEBAR
         return tk.Label(
-            parent,
-            text=text,
-            bg=bg,
-            fg=TEXT,
-            font=FONT_BODY,
-            anchor="w",
-            padx=10,
-            pady=6
+            parent, text=text, bg=bg, fg=TEXT, font=FONT_BODY, anchor="w", padx=10, pady=6
         )
 
     def _build_sidebar(self, parent, active_label="Billing"):
@@ -127,14 +119,8 @@ class BillingFrame(tk.Frame):
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
         logo_box.pack(fill="x", padx=10, pady=(12, 10))
         tk.Label(
-            logo_box,
-            text="CareFlow\nStaff Portal",
-            bg=BG_SIDEBAR_LIGHT,
-            fg=TEXT,
-            font=("Helvetica", 9, "bold"),
-            justify="left",
-            padx=8,
-            pady=8
+            logo_box, text="CareFlow\nStaff Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+            font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8
         ).pack(anchor="w")
 
         items = ["Dashboard", "Patient", "Staff", "Clinic", "Records", "Billing"]
@@ -142,12 +128,8 @@ class BillingFrame(tk.Frame):
             self._sidebar_button(sidebar, item, active=(item == active_label)).pack(fill="x", padx=10, pady=2)
 
         tk.Label(
-            sidebar,
-            text=f"Signed in as:\n{self.logged_in_staff_name or 'Staff'}",
-            bg=BG_SIDEBAR,
-            fg=TEXT,
-            font=FONT_SMALL,
-            justify="left"
+            sidebar, text=f"Signed in as:\n{self.logged_in_staff_name or 'Staff'}",
+            bg=BG_SIDEBAR, fg=TEXT, font=FONT_SMALL, justify="left"
         ).pack(side="bottom", anchor="w", padx=10, pady=12)
 
         return sidebar
@@ -178,9 +160,7 @@ class BillingFrame(tk.Frame):
         card = tk.Frame(body, bg=CARD_BG, bd=1, relief="solid")
         card.place(relx=0.5, rely=0.45, anchor="center", width=420, height=230)
 
-        tk.Label(card, text="Login to create and manage bills", bg=CARD_BG, fg=TEXT, font=FONT_HEADER).pack(
-            pady=(18, 14)
-        )
+        tk.Label(card, text="Login to create and manage bills", bg=CARD_BG, fg=TEXT, font=FONT_HEADER).pack(pady=(18, 14))
 
         tk.Label(card, text="Email", bg=CARD_BG, fg=TEXT, font=FONT_BODY).pack(anchor="w", padx=30)
         self.email_var = tk.StringVar()
@@ -188,20 +168,11 @@ class BillingFrame(tk.Frame):
 
         tk.Label(card, text="Password", bg=CARD_BG, fg=TEXT, font=FONT_BODY).pack(anchor="w", padx=30)
         self.password_var = tk.StringVar()
-        tk.Entry(card, textvariable=self.password_var, show="*", width=34, bd=1, relief="solid").pack(
-            padx=30, pady=(4, 14)
-        )
+        tk.Entry(card, textvariable=self.password_var, show="*", width=34, bd=1, relief="solid").pack(padx=30, pady=(4, 14))
 
         tk.Button(
-            card,
-            text="Login",
-            bg=BG_SIDEBAR,
-            fg=TEXT,
-            font=FONT_BTN,
-            relief="flat",
-            padx=18,
-            pady=8,
-            command=self.login_staff
+            card, text="Login", bg=BG_SIDEBAR, fg=TEXT, font=FONT_BTN,
+            relief="flat", padx=18, pady=8, command=self.login_staff
         ).pack()
 
     def login_staff(self):
@@ -215,8 +186,7 @@ class BillingFrame(tk.Frame):
         cur = self._db().cursor()
         row = cur.execute("""
             SELECT staff_id, first_name, last_name, password_hash, active_flag, role
-            FROM Staff
-            WHERE LOWER(email) = LOWER(?)
+            FROM Staff WHERE LOWER(email) = LOWER(?)
         """, (email,)).fetchone()
 
         if not row:
@@ -332,7 +302,6 @@ class BillingFrame(tk.Frame):
         self.loc_var = tk.StringVar()
         self.loc_combo = ttk.Combobox(form, textvariable=self.loc_var, state="readonly", width=45)
         self.loc_combo.grid(row=r, column=1, padx=8, pady=6, sticky="w")
-        r += 1
 
         action_row = tk.Frame(form_panel, bg=BG_PANEL)
         action_row.pack(fill="x", padx=12, pady=(0, 12))
@@ -358,7 +327,9 @@ class BillingFrame(tk.Frame):
         table_wrap.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
         cols = ("bill_id", "patient", "amount", "due_date", "status", "created_at")
-        self.tree = ttk.Treeview(recent, columns=cols, show="headings", height=11)
+
+        # FIX: both tree and scrollbar parented to table_wrap so they stay connected
+        self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", height=11)
         for c in cols:
             self.tree.heading(c, text=c.replace("_", " ").title())
             self.tree.column(c, width=140 if c != "created_at" else 170)
@@ -369,7 +340,7 @@ class BillingFrame(tk.Frame):
         vsb = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
         self.tree.pack(side="left", fill="both", expand=True)
-        vsb.pack(side="left", fill="y")
+        vsb.pack(side="right", fill="y")
 
         self.template_combo.set("Checkup")
         self._apply_template()
@@ -382,8 +353,7 @@ class BillingFrame(tk.Frame):
     def _load_patients(self):
         rows = self._db().cursor().execute("""
             SELECT patient_id, first_name, last_name, email, location_id
-            FROM Patient
-            ORDER BY last_name, first_name
+            FROM Patient ORDER BY last_name, first_name
         """).fetchall()
 
         self.patient_map.clear()
@@ -401,9 +371,7 @@ class BillingFrame(tk.Frame):
 
     def _load_locations(self):
         rows = self._db().cursor().execute("""
-            SELECT location_id, name, status
-            FROM ClinicLocation
-            ORDER BY name
+            SELECT location_id, name, status FROM ClinicLocation ORDER BY name
         """).fetchall()
 
         self.location_map.clear()
@@ -423,8 +391,7 @@ class BillingFrame(tk.Frame):
             return
         pid = self.patient_map[label]
         row = self._db().cursor().execute(
-            "SELECT location_id FROM Patient WHERE patient_id = ?",
-            (pid,)
+            "SELECT location_id FROM Patient WHERE patient_id = ?", (pid,)
         ).fetchone()
         if not row or row[0] is None:
             return
