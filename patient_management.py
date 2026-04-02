@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-careflow_patients.py
+careflow_patients_updated.py
 
-CareFlow Patient Management page — structured and styled to match
-careflow_records.py exactly (same sidebar, header, treeview, action bar).
+CareFlow Patient Management page — with Active / Inactive summary cards
+matching the Staff Management page style.
 """
 
 import tkinter as tk
@@ -12,7 +12,7 @@ import sqlite3
 from typing import Optional
 
 # ==============================
-# Config / Styles  (shared with dashboard)
+# Config / Styles
 # ==============================
 BG_LIGHT         = "#e6f2ec"
 BG_SIDEBAR       = "#5FAF90"
@@ -33,6 +33,7 @@ FONT_HEADER   = ("Helvetica", 13, "bold")
 FONT_TABLE    = ("Helvetica", 10)
 FONT_NAV      = ("Helvetica", 10)
 FONT_LOGO     = ("Helvetica", 13, "bold")
+FONT_SMALL    = ("Helvetica", 10)
 
 DB_NAME = "healthcare.db"
 
@@ -70,9 +71,6 @@ def ensure_patient_table() -> None:
     conn.close()
 
 
-# ==============================
-# Nav helper
-# ==============================
 def on_nav(name: str):
     print(f"[NAV] {name} clicked")
 
@@ -92,6 +90,9 @@ class CareFlowPatients(tk.Tk):
         ensure_patient_table()
 
         self._selected_id: Optional[int] = None
+        self._total_var   = tk.StringVar(value="0")
+        self._active_var  = tk.StringVar(value="0")
+        self._inactive_var = tk.StringVar(value="0")
 
         self._build_sidebar()
         self._build_header()
@@ -99,7 +100,7 @@ class CareFlowPatients(tk.Tk):
         self._load_patients()
 
     # ------------------------------------------------------------------
-    # Sidebar  (identical to records page)
+    # Sidebar
     # ------------------------------------------------------------------
     def _build_sidebar(self):
         sidebar = tk.Frame(self, bg=BG_SIDEBAR, width=SIDEBAR_WIDTH, relief="flat")
@@ -113,7 +114,7 @@ class CareFlowPatients(tk.Tk):
 
         nav_items = [
             ("Dashboard", lambda: on_nav("Dashboard")),
-            ("Patient",   lambda: on_nav("Patient")),   # active page
+            ("Patient",   lambda: on_nav("Patient")),
             ("Staff",     lambda: on_nav("Staff")),
             ("Clinic",    lambda: on_nav("Clinic")),
             ("Records",   lambda: on_nav("Records")),
@@ -131,7 +132,7 @@ class CareFlowPatients(tk.Tk):
             ).pack(fill="x", pady=2, padx=8)
 
     # ------------------------------------------------------------------
-    # Header  (identical to records page)
+    # Header
     # ------------------------------------------------------------------
     def _build_header(self):
         header = tk.Frame(self, bg=BG_PANEL, height=90, relief="flat")
@@ -155,65 +156,81 @@ class CareFlowPatients(tk.Tk):
     # Main content area
     # ------------------------------------------------------------------
     def _build_content(self):
-        # Two-column layout: table on the left, form panel on the right
         outer = tk.Frame(self, bg=BG_LIGHT)
         outer.grid(row=1, column=1, sticky="nsew", padx=(12, 12), pady=(8, 12))
-        outer.grid_rowconfigure(0, weight=1)
+        outer.grid_rowconfigure(2, weight=1)
         outer.grid_columnconfigure(0, weight=1)
 
+        self._build_filter_bar(outer)
         self._build_table_panel(outer)
         self._build_form_panel(outer)
         self._build_action_bar(outer)
 
     # ------------------------------------------------------------------
-    # Left: table panel  (mirrors records table structure)
+    # Filter / summary bar  (matches staff page style)
     # ------------------------------------------------------------------
-    def _build_table_panel(self, parent):
-        # Search / filter bar
-        filter_bar = tk.Frame(parent, bg=BG_PANEL, relief="flat", bd=0)
-        filter_bar.grid(row=0, column=0, sticky="new", pady=(0, 8))
+    def _build_filter_bar(self, parent):
+        filter_bar = tk.Frame(parent, bg=BG_PANEL)
+        filter_bar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=0, pady=(0, 6))
         filter_bar.grid_columnconfigure(1, weight=1)
 
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("TEntry", fieldbackground=CARD_BG, foreground=TEXT)
+        # --- Summary cards ---
+        card_frame = tk.Frame(filter_bar, bg=BG_PANEL)
+        card_frame.grid(row=0, column=0, sticky="w", padx=(0, 12))
 
-        tk.Label(filter_bar, text="Search:", bg=BG_PANEL, fg=TEXT,
-                 font=("Helvetica", 10, "bold")).grid(
-            row=0, column=0, sticky="w", padx=(14, 6), pady=8)
+        card_defs = [
+            ("Total Patients",    self._total_var),
+            ("Active Patients",   self._active_var),
+            ("Inactive Patients", self._inactive_var),
+        ]
+        for lbl, var in card_defs:
+            c = tk.Frame(card_frame, bg=CARD_BG, bd=1, relief="raised", width=140, height=56)
+            c.pack(side="left", padx=(0, 8))
+            c.pack_propagate(False)
+            tk.Label(c, textvariable=var, bg=CARD_BG, fg=TEXT,
+                     font=("Helvetica", 15, "bold")).pack(anchor="nw", padx=10, pady=(4, 0))
+            tk.Label(c, text=lbl, bg=CARD_BG, fg=TEXT,
+                     font=FONT_SMALL).pack(anchor="nw", padx=10)
 
+        # --- Search + toggle ---
+        right_bar = tk.Frame(filter_bar, bg=BG_PANEL)
+        right_bar.grid(row=0, column=1, sticky="e")
+
+        tk.Label(right_bar, text="Search:", bg=BG_PANEL, fg=TEXT,
+                 font=("Helvetica", 10, "bold")).pack(side="left", padx=(0, 6))
         self.search_var = tk.StringVar()
-        se = ttk.Entry(filter_bar, textvariable=self.search_var, width=40)
-        se.grid(row=0, column=1, sticky="ew", padx=(0, 6), pady=8)
-        se.bind("<KeyRelease>", lambda e: self._load_patients())
-
-        tk.Button(
-            filter_bar, text="Show All", bg=BG_SIDEBAR, fg=TEXT,
-            relief="flat", padx=10, pady=3,
-            activebackground=BG_SIDEBAR_LIGHT, activeforeground=TEXT,
-            command=self._load_patients
-        ).grid(row=0, column=2, padx=(0, 6), pady=8)
+        tk.Entry(right_bar, textvariable=self.search_var, width=28,
+                 font=FONT_SMALL, bg=CARD_BG, fg=TEXT, relief="flat",
+                 highlightthickness=1, highlightbackground="#cde8dc",
+                 highlightcolor=ACCENT).pack(side="left")
+        self.search_var.trace_add("write", lambda *_: self._load_patients())
 
         self.show_inactive_var = tk.BooleanVar(value=True)
         tk.Checkbutton(
-            filter_bar, text="Show inactive", variable=self.show_inactive_var,
+            right_bar, text="Show inactive", variable=self.show_inactive_var,
             bg=BG_PANEL, fg=TEXT, activebackground=BG_PANEL,
             selectcolor=CARD_BG, command=self._load_patients
-        ).grid(row=0, column=3, padx=(0, 14), pady=8)
+        ).pack(side="left", padx=(10, 0))
 
-        # Table container — same card style as records
+        # Divider
+        tk.Frame(parent, bg="#e0e0e0", height=1).grid(
+            row=1, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+
+    # ------------------------------------------------------------------
+    # Table panel
+    # ------------------------------------------------------------------
+    def _build_table_panel(self, parent):
         container = tk.Frame(parent, bg=BG_PANEL, bd=1, relief="solid")
-        container.grid(row=1, column=0, sticky="nsew", pady=(0, 8))
+        container.grid(row=2, column=0, sticky="nsew", pady=(0, 8))
         container.grid_rowconfigure(1, weight=1)
         container.grid_columnconfigure(0, weight=1)
-        parent.grid_rowconfigure(1, weight=1)
 
-        lbl_frame = tk.Frame(container, bg=BG_PANEL)
-        lbl_frame.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 0))
-        tk.Label(lbl_frame, text="Patients", bg=BG_PANEL,
-                 fg=TEXT, font=FONT_HEADER).pack(anchor="w")
+        tk.Label(container, text="Patients", bg=BG_PANEL,
+                 fg=TEXT, font=FONT_HEADER).grid(
+            row=0, column=0, sticky="w", padx=14, pady=(10, 4))
 
-        # Treeview — same style as records
+        style = ttk.Style()
+        style.theme_use("clam")
         style.configure("CareFlow.Treeview",
                         background=CARD_BG, fieldbackground=CARD_BG,
                         foreground=TEXT, rowheight=28, font=FONT_TABLE)
@@ -254,12 +271,11 @@ class CareFlowPatients(tk.Tk):
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
     # ------------------------------------------------------------------
-    # Right: form panel  (same card style as filter/table panels)
+    # Form panel
     # ------------------------------------------------------------------
     def _build_form_panel(self, parent):
         panel = tk.Frame(parent, bg=BG_PANEL, bd=1, relief="solid", padx=16, pady=14)
-        panel.grid(row=0, column=1, rowspan=2, sticky="nsew",
-                   padx=(10, 0), pady=(0, 8))
+        panel.grid(row=2, column=1, sticky="nsew", padx=(10, 0), pady=(0, 8))
         parent.grid_columnconfigure(1, minsize=280)
 
         tk.Label(panel, text="Patient Details", bg=BG_PANEL,
@@ -282,9 +298,6 @@ class CareFlowPatients(tk.Tk):
             ("Emergency Contact",  "emergency_contact"),
         ]
 
-        style = ttk.Style()
-        style.configure("TEntry", fieldbackground=CARD_BG, foreground=TEXT)
-
         for i, (label, key) in enumerate(fields, start=1):
             tk.Label(panel, text=label, bg=BG_PANEL, fg=TEXT,
                      font=("Helvetica", 9)).grid(
@@ -299,11 +312,11 @@ class CareFlowPatients(tk.Tk):
         panel.grid_columnconfigure(1, weight=1)
 
     # ------------------------------------------------------------------
-    # Action bar  (mirrors records action bar layout)
+    # Action bar
     # ------------------------------------------------------------------
     def _build_action_bar(self, parent):
         bar = tk.Frame(parent, bg=BG_LIGHT)
-        bar.grid(row=2, column=0, columnspan=2, sticky="ew")
+        bar.grid(row=3, column=0, columnspan=2, sticky="ew")
 
         btn_cfg = dict(
             relief="flat", fg="white", padx=16, pady=8,
@@ -339,20 +352,28 @@ class CareFlowPatients(tk.Tk):
             FROM Patient
             ORDER BY last_name, first_name
         """).fetchall()
+
+        total    = conn.execute("SELECT COUNT(*) FROM Patient").fetchone()[0]
+        active   = conn.execute("SELECT COUNT(*) FROM Patient WHERE active_flag=1").fetchone()[0]
+        inactive = conn.execute("SELECT COUNT(*) FROM Patient WHERE active_flag=0").fetchone()[0]
         conn.close()
+
+        self._total_var.set(str(total))
+        self._active_var.set(str(active))
+        self._inactive_var.set(str(inactive))
 
         self.tree.delete(*self.tree.get_children())
 
-        for pid, fn, ln, dob, phone, email, active in rows:
-            if not show_inactive and active == 0:
+        for pid, fn, ln, dob, phone, email, active_flag in rows:
+            if not show_inactive and active_flag == 0:
                 continue
             name = f"{ln}, {fn}"
             if search and search not in name.lower() \
                     and search not in (phone or "").lower() \
                     and search not in (email or "").lower():
                 continue
-            status = "Active" if active else "Inactive"
-            tag    = "inactive" if not active else ""
+            status = "Active" if active_flag else "Inactive"
+            tag    = "inactive" if not active_flag else ""
             self.tree.insert("", "end", iid=str(pid),
                              values=(pid, name, dob or "", phone or "",
                                      email or "", status),

@@ -15,12 +15,14 @@ import sqlite3
 DB_NAME = "healthcare.db"
 
 # ── Style (mirrors careflow_dashboard.py) ───────────────────────────
-BG_LIGHT   = "#e6f2ec"
-BG_SIDEBAR = "#95ecdf"
-BG_PANEL   = "#ffffff"
-ACCENT     = "#308684"
-CARD_BG    = "#f7fff7"
-TEXT       = "#0b3d2e"
+BG_LIGHT        = "#e6f2ec"
+BG_SIDEBAR      = "#5FAF90"
+BG_SIDEBAR_LIGHT = "#A2DDC6"
+BG_PANEL        = "#ffffff"
+ACCENT          = "#308684"
+CARD_BG         = "#f7fff7"
+TEXT            = "#0b3d2e"
+BORDER          = "#cfd8d3"
 
 FONT_TITLE  = ("Helvetica", 20, "bold")
 FONT_HEADER = ("Helvetica", 14, "bold")
@@ -32,6 +34,7 @@ BTN_GREEN  = ACCENT
 BTN_ORANGE = "#e07b2a"
 BTN_RED    = "#c0392b"
 BTN_GRAY   = "#ccc"
+BTN_SIDEBAR = BG_SIDEBAR
 
 # ── DB helpers ───────────────────────────────────────────────────────
 def get_all_active_clinics():
@@ -130,9 +133,9 @@ def _open_form_dialog(parent, title, initial=None, on_submit=None):
     win.grab_set()
 
     # Header bar
-    hdr = tk.Frame(win, bg=ACCENT, height=48)
+    hdr = tk.Frame(win, bg=BG_SIDEBAR, height=48)
     hdr.pack(fill="x")
-    tk.Label(hdr, text=title, bg=ACCENT, fg="white",
+    tk.Label(hdr, text=title, bg=BG_SIDEBAR, fg=TEXT,
              font=FONT_HEADER).pack(side="left", padx=16, pady=10)
 
     body = tk.Frame(win, bg=BG_LIGHT)
@@ -168,7 +171,7 @@ def _open_form_dialog(parent, title, initial=None, on_submit=None):
     btn_row = tk.Frame(win, bg=BG_LIGHT)
     btn_row.pack(pady=(0, 14))
 
-    tk.Button(btn_row, text="Save", bg=ACCENT, fg="white",
+    tk.Button(btn_row, text="Save", bg=BG_SIDEBAR, fg=TEXT,
               font=FONT_BTN, relief="flat", width=12,
               padx=6, pady=4, cursor="hand2",
               command=submit).pack(side="left", padx=8)
@@ -198,24 +201,33 @@ class ClinicLocationApp(tk.Tk):
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
-        tk.Label(sidebar, text="CareFlow", bg=BG_SIDEBAR, fg=TEXT,
-                 font=("Helvetica", 13, "bold")).pack(anchor="w", padx=14, pady=(16, 4))
-        tk.Label(sidebar, text="Clinic Locations", bg=BG_SIDEBAR, fg=ACCENT,
-                 font=("Helvetica", 10, "bold")).pack(anchor="w", padx=14, pady=(0, 16))
+        logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
+        logo_box.pack(fill="x", padx=10, pady=(12, 10))
+        tk.Label(logo_box, text="CareFlow\nClinic Locations", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8).pack(anchor="w")
 
         ttk.Separator(sidebar, orient="horizontal").pack(fill="x", padx=10, pady=4)
 
-        sidebar_btns = [
-            ("＋  Add Clinic",    BTN_GREEN,  self.open_add_dialog),
-            ("✎  Edit Selected",  BTN_ORANGE, self.open_edit_dialog),
-            ("✕  Delete Selected",BTN_RED,    self.delete_selected),
-            ("↺  Refresh",        ACCENT,     self.refresh_table),
+        items = ["Dashboard", "Patient", "Staff", "Clinic", "Records", "Billing"]
+        for item in items:
+            bg = BG_SIDEBAR_LIGHT if item == "Clinic" else BG_SIDEBAR
+            tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                     anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
+
+        ttk.Separator(sidebar, orient="horizontal").pack(fill="x", padx=10, pady=8)
+
+        action_btns = [
+            ("＋  Add Clinic",     BTN_GREEN,  self.open_add_dialog),
+            ("✎  Edit Selected",   BTN_ORANGE, self.open_edit_dialog),
+            ("✕  Delete Selected", BTN_RED,    self.delete_selected),
+            ("↺  Refresh",         BG_SIDEBAR, self.refresh_table),
         ]
-        for label, color, cmd in sidebar_btns:
-            tk.Button(sidebar, text=label, bg=color, fg="white",
+        for label, color, cmd in action_btns:
+            fg = TEXT if color == BG_SIDEBAR else "white"
+            tk.Button(sidebar, text=label, bg=color, fg=fg,
                       font=FONT_BTN, relief="flat", anchor="w",
                       padx=12, pady=6, cursor="hand2",
-                      command=cmd).pack(fill="x", padx=10, pady=4)
+                      command=cmd).pack(fill="x", padx=10, pady=3)
 
         # ── Main panel ────────────────────────────────────────────
         main = tk.Frame(self, bg=BG_LIGHT)
