@@ -1,12 +1,13 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox, filedialog, ttk
 import sqlite3
 import os
 import hashlib
 import hmac
 from datetime import datetime
 
-DB_NAME = "healthcare.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "healthcare.db")
 
 # --- Dashboard style palette ---
 BG_LIGHT = "#e6f2ec"
@@ -68,9 +69,12 @@ def generate_receipt_number(bill_id: int) -> str:
 
 
 class BillingFrame(tk.Frame):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, back_command=None):
         super().__init__(parent, bg=BG_LIGHT)
-        self.conn = sqlite3.connect(DB_NAME)
+        self.back_command = back_command
+
+        self.conn = None
+        self._reconnect_db()
         ensure_schema(self.conn)
 
         self.logged_in_patient_id = None
@@ -84,6 +88,14 @@ class BillingFrame(tk.Frame):
         self.patient_name_var = tk.StringVar(value="Not signed in")
 
         self._build_login_ui()
+
+    def _reconnect_db(self):
+        try:
+            if self.conn:
+                self.conn.close()
+        except Exception:
+            pass
+        self.conn = sqlite3.connect(DB_NAME, timeout=5)
 
     def _db(self):
         return self.conn
@@ -194,6 +206,8 @@ class BillingFrame(tk.Frame):
         ).pack()
 
     def login_patient(self):
+        self._reconnect_db()
+
         email = self.email_var.get().strip()
         password = self.password_var.get()
 
@@ -248,6 +262,10 @@ class BillingFrame(tk.Frame):
 
         right_header = tk.Frame(header, bg=BG_PANEL)
         right_header.pack(side="right", padx=14, pady=12)
+        if self.back_command:
+            tk.Button(right_header, text="Back", bg="#e0e0e0", fg="#222", relief="flat", command=self.back_command).pack(
+                side="left", padx=4
+            )
         tk.Button(right_header, text="Refresh", bg=BG_SIDEBAR, fg=TEXT, relief="flat", command=self.refresh).pack(
             side="left", padx=4
         )
@@ -422,6 +440,7 @@ class BillingFrame(tk.Frame):
         self.pm_card.config(text=f"Payment Methods\n{len(self.payment_method_map)}")
 
     def refresh(self):
+        self._reconnect_db()
         self._load_payment_methods()
         self._load_bills()
 
@@ -511,6 +530,7 @@ class BillingFrame(tk.Frame):
             exp_year_db = int(exp_year)
 
             try:
+                self._reconnect_db()
                 cur = self._db().cursor()
 
                 if active_flag == 1:
@@ -575,6 +595,7 @@ class BillingFrame(tk.Frame):
         receipt_number = generate_receipt_number(bill_id)
         paid_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        self._reconnect_db()
         self._db().execute("""
             UPDATE Bill
             SET status = 'paid',
@@ -597,6 +618,7 @@ class BillingFrame(tk.Frame):
         values = self.tree.item(sel[0], "values")
         bill_id = int(values[0])
 
+        self._reconnect_db()
         row = self._db().cursor().execute("""
             SELECT
                 b.bill_id,
