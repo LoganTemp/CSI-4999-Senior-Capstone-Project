@@ -213,10 +213,11 @@ class DashboardFrame(tk.Frame):
     _SB       = "#5FAF90"   # sidebar green
     _SB_LIGHT = "#A2DDC6"   # sidebar highlight
 
-    def __init__(self, parent, role="Admin", back_cmd=None):
+    def __init__(self, parent, role="Admin", back_cmd=None, nav_cmd=None):
         super().__init__(parent, bg=BG_LIGHT)
         self.role     = role
         self.back_cmd = back_cmd
+        self.nav_cmd  = nav_cmd
         self._build()
 
     def _build(self):
@@ -245,7 +246,7 @@ class DashboardFrame(tk.Frame):
                       font=("Helvetica", 10), anchor="w", padx=10, pady=6,
                       relief="flat", activebackground=self._SB_LIGHT,
                       cursor="hand2",
-                      command=lambda l=item: on_nav(l)).pack(fill="x", padx=10, pady=2)
+                      command=lambda l=item: (self.nav_cmd(l) if self.nav_cmd else on_nav(l))).pack(fill="x", padx=10, pady=2)
 
         if self.back_cmd:
             tk.Button(sidebar, text="← Back", bg=self._SB, fg=TEXT,

@@ -372,6 +372,142 @@ class ClinicLocationApp(tk.Tk):
             self.status_var.set(f"Deleted clinic '{name}'.")
 
 
+# ── Embeddable frame used by main.py portal ──────────────────────────
+class ClinicFrame(tk.Frame):
+    def __init__(self, parent, controller=None):
+        super().__init__(parent, bg=BG_LIGHT)
+        self.controller = controller
+        self._count_var = tk.StringVar(value="—")
+        self.status_var = tk.StringVar(value="Ready.")
+        self.tree       = None
+        self._build_ui()
+        self.refresh_table()
+
+    def _build_ui(self):
+        outer = tk.Frame(self, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # ── Sidebar ──────────────────────────────────────────────
+        sidebar = tk.Frame(outer, bg=BG_SIDEBAR, width=170)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
+        logo_box.pack(fill="x", padx=10, pady=(12, 10))
+        tk.Label(logo_box, text="CareFlow\nAdmin Portal",
+                 bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), justify="left",
+                 padx=8, pady=8).pack(anchor="w")
+
+        nav_map = {
+            "Dashboard": "HomePage",
+            "Patient":   None,
+            "Staff":     "StaffMenuPage",
+            "Clinic":    None,
+            "Records":   None,
+            "Billing":   None,
+        }
+        for item, page in nav_map.items():
+            is_active = item == "Clinic"
+            bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
+
+            def make_cmd(p=page):
+                if p and self.controller:
+                    return lambda: self.controller.show_frame(p)
+                return None
+
+            cmd = make_cmd()
+            if cmd:
+                tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                          anchor="w", padx=10, pady=6, relief="flat",
+                          activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
+                          command=cmd).pack(fill="x", padx=10, pady=2)
+            else:
+                tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                         anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
+
+        if self.controller:
+            tk.Button(sidebar, text="← Dashboard", bg=BG_SIDEBAR, fg=TEXT,
+                      font=FONT_BTN, relief="flat", anchor="w",
+                      padx=12, pady=6, cursor="hand2",
+                      command=lambda: self.controller.show_frame("HomePage")
+                      ).pack(side="bottom", fill="x", padx=10, pady=(0, 12))
+
+        # ── Main panel ───────────────────────────────────────────
+        main = tk.Frame(outer, bg=BG_LIGHT)
+        main.pack(side="left", fill="both", expand=True, padx=(12, 0))
+
+        # White header
+        header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        header.pack(fill="x", padx=12, pady=(12, 0))
+        tk.Label(header, text="Clinic Location Management",
+                 bg=BG_PANEL, fg=TEXT, font=FONT_TITLE).pack(side="left", padx=14, pady=14)
+
+        # White body
+        body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        body.pack(fill="both", expand=True, padx=12, pady=(10, 12))
+
+        # Summary card row
+        card_row = tk.Frame(body, bg=BG_PANEL)
+        card_row.pack(fill="x", padx=14, pady=(12, 6))
+        self._make_card(card_row, "Active Clinics", self._count_var)
+
+        tk.Label(body, text="All Active Locations",
+                 bg=BG_PANEL, fg=TEXT, font=FONT_HEADER).pack(anchor="w", padx=20, pady=(4, 4))
+
+        # Table
+        table_wrap = tk.Frame(body, bg=BG_PANEL, bd=1, relief="solid")
+        table_wrap.pack(fill="both", expand=True, padx=14, pady=(0, 0))
+
+        cols = ("ID", "Name", "City", "State")
+        self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings",
+                                 selectmode="browse")
+        for col, w in zip(cols, (60, 280, 200, 100)):
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=w, anchor="w")
+
+        style = ttk.Style()
+        style.configure("Treeview", background=BG_PANEL, fieldbackground=BG_PANEL,
+                        foreground=TEXT, rowheight=30, font=FONT_BODY)
+        style.configure("Treeview.Heading", background=ACCENT, foreground="white",
+                        font=("Helvetica", 10, "bold"), relief="flat")
+        style.map("Treeview",
+                  background=[("selected", BG_SIDEBAR)],
+                  foreground=[("selected", TEXT)])
+
+        vsb = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        self.tree.pack(fill="both", expand=True)
+        self.tree.bind("<Double-1>", lambda _: self.open_edit_dialog())
+
+        # Action button bar (bottom of body, not in sidebar)
+        action_bar = tk.Frame(body, bg=BG_PANEL)
+        action_bar.pack(fill="x", padx=14, pady=(8, 10))
+
+        for label, color, cmd in [
+            ("＋  Add Clinic",      BTN_GREEN,  self.open_add_dialog),
+            ("✎  Edit Selected",    BTN_ORANGE, self.open_edit_dialog),
+            ("✕  Delete Selected",  BTN_RED,    self.delete_selected),
+            ("↺  Refresh",          ACCENT,     self.refresh_table),
+        ]:
+            tk.Button(action_bar, text=label, bg=color, fg="white",
+                      font=FONT_BTN, relief="flat",
+                      padx=12, pady=6, cursor="hand2",
+                      command=cmd).pack(side="left", padx=(0, 8))
+
+        # Status bar
+        tk.Label(body, textvariable=self.status_var,
+                 bg=BG_SIDEBAR_LIGHT, fg=TEXT, font=FONT_SMALL,
+                 anchor="w", padx=12, pady=4).pack(fill="x", side="bottom", padx=14, pady=(0, 8))
+
+
+# Copy data/action methods from ClinicLocationApp onto ClinicFrame
+for _n, _v in vars(ClinicLocationApp).items():
+    if not _n.startswith('__') and callable(_v) and _n != '_build_ui':
+        setattr(ClinicFrame, _n, _v)
+
+
 # ── Entry point ──────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = ClinicLocationApp()

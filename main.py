@@ -1,5 +1,22 @@
 import tkinter as tk
-from dashboardSandbox import DashboardFrame
+from dashboardSandbox  import DashboardFrame
+from staff_management  import StaffManagementFrame
+from clinic_location   import ClinicFrame
+
+
+class PortalController:
+    """Minimal controller so StaffManagementFrame sidebar nav can go back to dashboard."""
+    def __init__(self, app, role):
+        self._app  = app
+        self._role = role
+
+    def show_frame(self, name):
+        if name == "HomePage":
+            self._app._show_dashboard(self._role)
+        elif name == "StaffMenuPage":
+            self._app._portal_nav("Staff", self._role)
+        elif name == "LocationMenuPage":
+            self._app._portal_nav("Clinic", self._role)
 
 # ── Colour palette (identical to all other modules) ──────────────────────────
 BG_LIGHT         = "#e6f2ec"
@@ -101,8 +118,24 @@ class MainApp(tk.Tk):
     def _show_dashboard(self, role):
         for w in self.winfo_children():
             w.destroy()
-        frame = DashboardFrame(self, role=role, back_cmd=self._build_ui)
+        frame = DashboardFrame(self, role=role,
+                               back_cmd=self._build_ui,
+                               nav_cmd=lambda item: self._portal_nav(item, role))
         frame.pack(fill="both", expand=True)
+
+    def _portal_nav(self, item, role):
+        if item == "Staff":
+            for w in self.winfo_children():
+                w.destroy()
+            f = StaffManagementFrame(self, controller=PortalController(self, role))
+            f.pack(fill="both", expand=True)
+        elif item == "Clinic":
+            for w in self.winfo_children():
+                w.destroy()
+            f = ClinicFrame(self, controller=PortalController(self, role))
+            f.pack(fill="both", expand=True)
+        elif item == "Dashboard":
+            self._show_dashboard(role)
 
     # ── Role card ─────────────────────────────────────────────────────────────
     def _make_role_card(self, parent, icon, role, lines, command=None):
