@@ -84,15 +84,20 @@ class CareFlowPatients(tk.Tk):
         self.title("CareFlow Admin Portal – Patients")
         self.geometry("1200x720")
         self.configure(bg=BG_LIGHT)
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(1, weight=1)
 
         ensure_patient_table()
 
         self._selected_id: Optional[int] = None
-        self._total_var   = tk.StringVar(value="0")
-        self._active_var  = tk.StringVar(value="0")
+        self._total_var    = tk.StringVar(value="0")
+        self._active_var   = tk.StringVar(value="0")
         self._inactive_var = tk.StringVar(value="0")
+
+        # ── Main frame ──────────────────────────────────────────────────
+        self.main_frame = tk.Frame(self, bg=BG_LIGHT)
+        self.main_frame.pack(fill="both", expand=True)
+        self.main_frame.grid_rowconfigure(1, weight=1)
+        self.main_frame.grid_columnconfigure(1, weight=1)
+        # ────────────────────────────────────────────────────────────────
 
         self._build_sidebar()
         self._build_header()
@@ -103,7 +108,7 @@ class CareFlowPatients(tk.Tk):
     # Sidebar
     # ------------------------------------------------------------------
     def _build_sidebar(self):
-        sidebar = tk.Frame(self, bg=BG_SIDEBAR, width=SIDEBAR_WIDTH, relief="flat")
+        sidebar = tk.Frame(self.main_frame, bg=BG_SIDEBAR, width=SIDEBAR_WIDTH, relief="flat")
         sidebar.grid(row=0, column=0, rowspan=2, sticky="nsw")
         sidebar.grid_propagate(False)
 
@@ -135,7 +140,7 @@ class CareFlowPatients(tk.Tk):
     # Header
     # ------------------------------------------------------------------
     def _build_header(self):
-        header = tk.Frame(self, bg=BG_PANEL, height=90, relief="flat")
+        header = tk.Frame(self.main_frame, bg=BG_PANEL, height=90, relief="flat")
         header.grid(row=0, column=1, sticky="new", padx=(12, 12), pady=(12, 0))
         header.grid_columnconfigure(0, weight=1)
         header.grid_propagate(False)
@@ -156,7 +161,7 @@ class CareFlowPatients(tk.Tk):
     # Main content area
     # ------------------------------------------------------------------
     def _build_content(self):
-        outer = tk.Frame(self, bg=BG_LIGHT)
+        outer = tk.Frame(self.main_frame, bg=BG_LIGHT)
         outer.grid(row=1, column=1, sticky="nsew", padx=(12, 12), pady=(8, 12))
         outer.grid_rowconfigure(2, weight=1)
         outer.grid_columnconfigure(0, weight=1)
@@ -167,7 +172,7 @@ class CareFlowPatients(tk.Tk):
         self._build_action_bar(outer)
 
     # ------------------------------------------------------------------
-    # Filter / summary bar  (matches staff page style)
+    # Filter / summary bar
     # ------------------------------------------------------------------
     def _build_filter_bar(self, parent):
         filter_bar = tk.Frame(parent, bg=BG_PANEL)
