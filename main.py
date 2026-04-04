@@ -1,6 +1,8 @@
 import tkinter as tk
 
-# ── Colour palette 
+# ── Colour palette (identical to all other modules) ──────────────────────────
+BG_LIGHT         = "#e6f2ec"
+BG_SIDEBAR       = "#5FAF90"
 BG_SIDEBAR_LIGHT = "#A2DDC6"
 BG_PANEL         = "#ffffff"
 CARD_BG          = "#f7fff7"
