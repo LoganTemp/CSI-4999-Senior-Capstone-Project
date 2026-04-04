@@ -285,9 +285,9 @@ class MainApp(tk.Tk):
         if item == "Patient":
             f = PatientManagementFrame(self, controller=ctrl, role=role)
         elif item == "Staff":
-            f = StaffManagementFrame(self, controller=ctrl)
+            f = StaffManagementFrame(self, controller=ctrl, role=role)
         elif item == "Clinic":
-            f = ClinicFrame(self, controller=ctrl)
+            f = ClinicFrame(self, controller=ctrl, role=role)
         elif item == "Records":
             f = RecordsFrame(self, controller=ctrl, role=role)
         elif item == "Billing":

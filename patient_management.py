@@ -110,7 +110,8 @@ class PatientManagementFrame(tk.Frame):
         header.pack(fill="x", padx=12, pady=(12, 0))
         tk.Label(header, text="Patient Management", font=FONT_TITLE,
                  bg=BG_PANEL, fg=TEXT).pack(side="left", padx=14, pady=14)
-        tk.Label(header, text="Signed in as\nAdministrators Name",
+        signed_in = "Staff" if self.role == "Staff" else "Administrator"
+        tk.Label(header, text=f"Signed in as: {signed_in}",
                  bg=BG_PANEL, fg=TEXT, justify="right").pack(side="right", padx=14)
 
         # White body

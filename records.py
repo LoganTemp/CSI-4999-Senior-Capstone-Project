@@ -535,18 +535,49 @@ class RecordsFrame(tk.Frame):
         super().__init__(parent, bg=BG_LIGHT)
         self.controller = controller
         self.role = role
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(1, weight=1)
 
         ensure_records_table_exists()
-        self._build_sidebar()
-        self._build_header()
-        self._build_content()
+        self._build_ui()
 
-    def _build_sidebar(self):
-        sidebar = tk.Frame(self, bg=BG_SIDEBAR, width=SIDEBAR_WIDTH)
-        sidebar.grid(row=0, column=0, rowspan=2, sticky="nsw")
-        sidebar.grid_propagate(False)
+        self.clinic_map, clinics = load_clinics()
+        self.patient_map: Dict[str, int] = {}
+        self.clinic_combo["values"] = clinics
+        if clinics:
+            self.clinic_combo.current(0)
+            self._on_clinic_selected()
+        else:
+            self.clinic_combo.set("No clinics found")
+
+    def _build_ui(self):
+        outer = tk.Frame(self, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=20, pady=20)
+
+        self._build_sidebar(outer)
+
+        main = tk.Frame(outer, bg=BG_LIGHT)
+        main.pack(side="left", fill="both", expand=True, padx=(12, 0))
+
+        header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        header.pack(fill="x")
+        tk.Label(header, text="Medical Records", bg=BG_PANEL,
+                 fg=TEXT, font=FONT_TITLE).pack(side="left", padx=14, pady=14)
+        signed_in = "Staff" if self.role == "Staff" else "Administrator"
+        tk.Label(header, text=f"Signed in as: {signed_in}", bg=BG_PANEL,
+                 fg=TEXT, font=("Helvetica", 10)).pack(side="right", padx=14)
+
+        body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        body.pack(fill="both", expand=True, pady=(10, 0))
+        body.grid_rowconfigure(1, weight=1)
+        body.grid_columnconfigure(0, weight=1)
+
+        self._build_filter_bar(body)
+        self._build_table(body)
+        self._build_action_bar(body)
+
+    def _build_sidebar(self, parent):
+        sidebar = tk.Frame(parent, bg=BG_SIDEBAR, width=SIDEBAR_WIDTH)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
 
         portal_label = "Staff Portal" if self.role == "Staff" else "Admin Portal"
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
@@ -598,9 +629,10 @@ class RecordsFrame(tk.Frame):
                       ).pack(side="bottom", fill="x", padx=10, pady=(0, 12))
 
 
-# Copy all methods except _build_sidebar from CareFlowRecords onto RecordsFrame
+# Copy data/event methods from CareFlowRecords onto RecordsFrame
+_SKIP = {"_build_sidebar", "_build_header", "_build_content", "_build_ui"}
 for _n, _v in vars(CareFlowRecords).items():
-    if not _n.startswith('__') and callable(_v) and _n != '_build_sidebar':
+    if not _n.startswith("__") and callable(_v) and _n not in _SKIP:
         setattr(RecordsFrame, _n, _v)
 
 

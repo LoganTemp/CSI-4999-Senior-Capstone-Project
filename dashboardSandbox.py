@@ -13,6 +13,9 @@ Includes:
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
+import sqlite3
+
+DB_NAME = "healthcare.db"
 
 # ---------- Configuration / Styles ----------
 BG_LIGHT = "#e6f2ec"
@@ -220,6 +223,15 @@ class DashboardFrame(tk.Frame):
         self.nav_cmd  = nav_cmd
         self._build()
 
+    def _stat(self, query, default="—"):
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            val = conn.execute(query).fetchone()[0]
+            conn.close()
+            return str(val) if val is not None else default
+        except Exception:
+            return default
+
     def _build(self):
         nav_items    = self.ADMIN_NAV if self.role == "Admin" else self.STAFF_NAV
         portal_label = "Admin Portal" if self.role == "Admin" else "Staff Portal"
@@ -265,7 +277,8 @@ class DashboardFrame(tk.Frame):
         header.pack(fill="x")
         tk.Label(header, text="Dashboard Overview",
                  bg=BG_PANEL, fg=TEXT, font=FONT_TITLE).pack(side="left", padx=14, pady=14)
-        tk.Label(header, text="Signed in as: Administrator",
+        signed_in = "Staff" if self.role == "Staff" else "Administrator"
+        tk.Label(header, text=f"Signed in as: {signed_in}",
                  bg=BG_PANEL, fg=TEXT,
                  font=("Helvetica", 10)).pack(side="right", padx=14, pady=14)
 
@@ -279,66 +292,79 @@ class DashboardFrame(tk.Frame):
         cards_frame = tk.Frame(content, bg=BG_PANEL)
         cards_frame.pack(fill="x", pady=(0, 12))
 
-        for label, value in [("Active Clinics", "12"), ("Total Patients", "234"),
-                              ("Active Staff", "27"),   ("Unpaid Billing", "$1,540")]:
+        for label, value in [
+            ("Active Clinics",  self._stat("SELECT COUNT(*) FROM ClinicLocation WHERE status='active'")),
+            ("Total Patients",  self._stat("SELECT COUNT(*) FROM Patient WHERE active_flag=1")),
+            ("Active Staff",    self._stat("SELECT COUNT(*) FROM Staff WHERE active_flag=1")),
+            ("Unpaid Bills",    self._stat("SELECT COUNT(*) FROM Bill WHERE paid_date IS NULL")),
+        ]:
             card = tk.Frame(cards_frame, bg=CARD_BG, bd=1, relief="raised",
                             width=200, height=70)
             card.pack(side="left", padx=(0, 8), pady=6)
             card.pack_propagate(False)
             tk.Label(card, text=value, bg=CARD_BG, fg=TEXT,
                      font=FONT_CARD_NUM).pack(anchor="nw", padx=10, pady=(8, 0))
-            tk.Button(card, text=label, bg=CARD_BG, fg=TEXT, font=FONT_CARD_LABEL,
-                      relief="flat",
-                      command=lambda l=label: on_card_click(l)).pack(anchor="nw", padx=10, pady=(0, 8))
+            tk.Label(card, text=label, bg=CARD_BG, fg=TEXT,
+                     font=FONT_CARD_LABEL).pack(anchor="nw", padx=10)
 
-        tk.Label(content, text="Section Title",
+        tk.Label(content, text="Recent Patients",
                  bg=BG_PANEL, fg=TEXT, font=FONT_HEADER).pack(anchor="w", pady=(6, 4))
 
-        table_container = tk.Frame(content, bg=BG_PANEL, bd=1, relief="solid")
-        table_container.pack(fill="both", expand=True, pady=(0, 8))
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("CareFlow.Treeview",
+                        background=CARD_BG, fieldbackground=CARD_BG,
+                        foreground=TEXT, rowheight=28, font=FONT_TABLE)
+        style.configure("CareFlow.Treeview.Heading",
+                        background=self._SB_LIGHT, foreground=TEXT,
+                        font=("Helvetica", 10, "bold"), relief="flat")
+        style.map("CareFlow.Treeview",
+                  background=[("selected", self._SB)],
+                  foreground=[("selected", TEXT)])
 
-        header_frame = tk.Frame(table_container, bg="#f0f0f0")
-        header_frame.pack(fill="x")
-        for h in ["ID", "CLINIC NAME", "ADDRESS", "CITY", "PHONE", "STATUS", "ACTION"]:
-            tk.Label(header_frame, text=h, bg="#f0f0f0", font=FONT_TABLE,
-                     borderwidth=1, relief="flat").pack(side="left", padx=6, pady=6)
+        tree_frame = tk.Frame(content, bg=BG_PANEL)
+        tree_frame.pack(fill="both", expand=True, pady=(0, 8))
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
 
-        body_frame = tk.Frame(table_container, bg=BG_PANEL)
-        body_frame.pack(fill="both", expand=True)
-        canvas    = tk.Canvas(body_frame, bg=BG_PANEL, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(body_frame, orient="vertical", command=canvas.yview)
-        scrollable = tk.Frame(canvas, bg=BG_PANEL)
-        scrollable.bind("<Configure>",
-                        lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scrollable, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        cols = ("id", "name", "dob", "phone", "clinic", "status")
+        tree = ttk.Treeview(tree_frame, columns=cols, show="headings",
+                            style="CareFlow.Treeview")
+        for col, text, width in [
+            ("id",     "ID",     55),
+            ("name",   "Name",   200),
+            ("dob",    "DOB",    100),
+            ("phone",  "Phone",  120),
+            ("clinic", "Clinic", 180),
+            ("status", "Status", 80),
+        ]:
+            tree.heading(col, text=text)
+            tree.column(col, width=width, anchor="w")
 
-        for r in [{"id": "1", "clinic": "Northside Health", "address": "123 Maple St",
-                   "city": "Springfield", "phone": "555-0123", "status": "Active"},
-                  {"id": "2", "clinic": "River Clinic", "address": "98 River Rd",
-                   "city": "Lakeview",    "phone": "555-0789", "status": "Inactive"}]:
-            self._add_row(scrollable, r)
-        for _ in range(8):
-            self._add_row(scrollable, {})
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
 
-    def _add_row(self, parent, row):
-        row_frame = tk.Frame(parent, bg=BG_PANEL, pady=6)
-        row_frame.pack(fill="x", padx=4)
-        for text, width in [(row.get("id",""),6),(row.get("clinic",""),24),
-                            (row.get("address",""),30),(row.get("city",""),18),
-                            (row.get("phone",""),14),(row.get("status",""),12)]:
-            tk.Label(row_frame, text=text, bg=BG_PANEL, font=FONT_TABLE,
-                     width=width, anchor="w").pack(side="left", padx=6)
-        af = tk.Frame(row_frame, bg=BG_PANEL, width=120)
-        af.pack(side="left", padx=6)
-        if str(row.get("id","")).strip():
-            vid = row["id"]
-            tk.Button(af, text="View",
-                      command=lambda i=vid: on_action_view(i)).pack(side="left", padx=4)
-            tk.Button(af, text="Edit",
-                      command=lambda i=vid: on_action_edit(i)).pack(side="left", padx=4)
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            rows = conn.execute("""
+                SELECT p.patient_id,
+                       p.last_name || ', ' || p.first_name,
+                       COALESCE(p.dob, ''),
+                       COALESCE(p.phone, ''),
+                       COALESCE(cl.name, 'Unassigned'),
+                       CASE WHEN p.active_flag=1 THEN 'Active' ELSE 'Inactive' END
+                FROM Patient p
+                LEFT JOIN ClinicLocation cl ON cl.location_id = p.location_id
+                ORDER BY p.patient_id DESC
+                LIMIT 10
+            """).fetchall()
+            conn.close()
+            for row in rows:
+                tree.insert("", "end", values=row)
+        except Exception:
+            pass
 
 
 # ---------- Main ----------

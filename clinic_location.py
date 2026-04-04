@@ -416,9 +416,10 @@ class ClinicLocationApp(tk.Tk, _ClinicBase):
 
 # ── Embeddable frame used by main.py portal ──────────────────────────
 class ClinicFrame(tk.Frame, _ClinicBase):
-    def __init__(self, parent, controller=None):
+    def __init__(self, parent, controller=None, role="Admin"):
         super().__init__(parent, bg=BG_LIGHT)
         self.controller = controller
+        self.role = role
         self._build_ui()
         self.refresh_table()
 
@@ -433,7 +434,8 @@ class ClinicFrame(tk.Frame, _ClinicBase):
 
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
         logo_box.pack(fill="x", padx=10, pady=(12, 10))
-        tk.Label(logo_box, text="CareFlow\nAdmin Portal",
+        portal_label = "Staff Portal" if self.role == "Staff" else "Admin Portal"
+        tk.Label(logo_box, text=f"CareFlow\n{portal_label}",
                  bg=BG_SIDEBAR_LIGHT, fg=TEXT,
                  font=("Helvetica", 9, "bold"), justify="left",
                  padx=8, pady=8).pack(anchor="w")
@@ -482,6 +484,9 @@ class ClinicFrame(tk.Frame, _ClinicBase):
         tk.Label(header, text="Clinic Location Management",
                  bg=BG_PANEL, fg=TEXT, font=FONT_TITLE
                  ).pack(side="left", padx=14, pady=14)
+        signed_in = "Staff" if self.role == "Staff" else "Administrator"
+        tk.Label(header, text=f"Signed in as: {signed_in}",
+                 bg=BG_PANEL, fg=TEXT, font=("Helvetica", 10)).pack(side="right", padx=14)
 
         # White body — hands off to shared mixin
         body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")

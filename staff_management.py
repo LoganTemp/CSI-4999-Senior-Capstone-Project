@@ -58,9 +58,10 @@ def get_conn() -> sqlite3.Connection:
 
 
 class StaffManagementFrame(tk.Frame):
-    def __init__(self, parent=None, controller=None):
+    def __init__(self, parent=None, controller=None, role="Admin"):
         super().__init__(parent, bg=BG_LIGHT)
         self.controller = controller
+        self.role = role
         self.location_list = []
         self._all_rows = []
         self._selected_staff_id = None
@@ -85,6 +86,9 @@ class StaffManagementFrame(tk.Frame):
         header.pack(fill="x", padx=12, pady=(12, 0))
         tk.Label(header, text="Staff Management", font=FONT_TITLE,
                  bg=BG_PANEL, fg=TEXT).pack(side="left", padx=14, pady=14)
+        signed_in = "Staff" if self.role == "Staff" else "Administrator"
+        tk.Label(header, text=f"Signed in as: {signed_in}",
+                 bg=BG_PANEL, fg=TEXT, font=("Helvetica", 10)).pack(side="right", padx=14)
 
         # -- White body: summary cards + split content --
         body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
@@ -104,7 +108,8 @@ class StaffManagementFrame(tk.Frame):
 
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
         logo_box.pack(fill="x", padx=10, pady=(12, 10))
-        tk.Label(logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+        portal_label = "Staff Portal" if self.role == "Staff" else "Admin Portal"
+        tk.Label(logo_box, text=f"CareFlow\n{portal_label}", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
                  font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8).pack(anchor="w")
 
         nav_map = {
