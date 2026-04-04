@@ -277,6 +277,13 @@ class DashboardFrame(tk.Frame):
         header.pack(fill="x")
         tk.Label(header, text="Dashboard Overview",
                  bg=BG_PANEL, fg=TEXT, font=FONT_TITLE).pack(side="left", padx=14, pady=14)
+        try:
+            from PIL import Image, ImageTk
+            _dimg = Image.open("img/simple_clip_img.png").resize((45, 45), Image.LANCZOS)
+            self._dash_icon = ImageTk.PhotoImage(_dimg)
+            tk.Label(header, image=self._dash_icon, bg=BG_PANEL).pack(side="right", padx=(0, 14), pady=6)
+        except Exception:
+            pass
         signed_in = "Staff" if self.role == "Staff" else "Administrator"
         tk.Label(header, text=f"Signed in as: {signed_in}",
                  bg=BG_PANEL, fg=TEXT,

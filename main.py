@@ -247,6 +247,13 @@ class MainApp(tk.Tk):
         tk.Label(header, text="Healthcare Administration System",
                  bg=BG_PANEL, fg=BTN_NEUTRAL,
                  font=("Helvetica", 10)).pack(side="left", pady=14)
+        try:
+            from PIL import Image, ImageTk
+            _timg = Image.open("img/simple_clip_img.png").resize((45, 45), Image.LANCZOS)
+            self._text_logo = ImageTk.PhotoImage(_timg)
+            tk.Label(header, image=self._text_logo, bg=BG_PANEL).pack(side="right", padx=14, pady=8)
+        except Exception:
+            pass
 
         body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
         body.pack(fill="both", expand=True, pady=(10, 0))
@@ -254,6 +261,13 @@ class MainApp(tk.Tk):
         center = tk.Frame(body, bg=BG_PANEL)
         center.place(relx=0.5, rely=0.5, anchor="center")
 
+        try:
+            from PIL import Image, ImageTk
+            _rimg = Image.open("img/logo_round_img.png").resize((120, 120), Image.LANCZOS)
+            self._round_logo = ImageTk.PhotoImage(_rimg)
+            tk.Label(center, image=self._round_logo, bg=BG_PANEL).pack(pady=(0, 16))
+        except Exception:
+            pass
         tk.Label(center, text="Select your role to continue",
                  bg=BG_PANEL, fg=TEXT, font=("Helvetica", 15, "bold")).pack(pady=(0, 4))
         tk.Label(center, text="Choose the portal that matches your account type.",
