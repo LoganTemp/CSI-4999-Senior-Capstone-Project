@@ -64,7 +64,8 @@ def ensure_patient_table() -> None:
             notes             TEXT,
             emergency_contact TEXT,
             active_flag       INTEGER DEFAULT 1,
-            created_at        TEXT DEFAULT (datetime('now'))
+            created_at        TEXT DEFAULT (datetime('now')),
+            location_id       INTEGER REFERENCES ClinicLocation(location_id)
         )
     """)
     conn.commit()
@@ -86,8 +87,10 @@ class PatientManagementFrame(tk.Frame):
         self._total_var    = tk.StringVar(value="0")
         self._active_var   = tk.StringVar(value="0")
         self._inactive_var = tk.StringVar(value="0")
+        self.location_list = []
 
         self._build_ui()
+        self._load_locations()
         self._load_patients()
 
     # ------------------------------------------------------------------
@@ -259,17 +262,18 @@ class PatientManagementFrame(tk.Frame):
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
 
-        cols = ("id", "name", "dob", "phone", "email", "status")
+        cols = ("id", "name", "dob", "phone", "email", "location", "status")
         self.tree = ttk.Treeview(tree_frame, columns=cols, show="headings",
                                  style="CareFlow.Treeview")
 
         headings = {
-            "id":     ("ID",     55,  "center"),
-            "name":   ("Name",   200, "w"),
-            "dob":    ("DOB",    100, "center"),
-            "phone":  ("Phone",  120, "center"),
-            "email":  ("Email",  200, "w"),
-            "status": ("Status", 75,  "center"),
+            "id":       ("ID",       55,  "center"),
+            "name":     ("Name",     180, "w"),
+            "dob":      ("DOB",      100, "center"),
+            "phone":    ("Phone",    110, "center"),
+            "email":    ("Email",    180, "w"),
+            "location": ("Clinic",   130, "w"),
+            "status":   ("Status",   75,  "center"),
         }
         for col, (text, width, anchor) in headings.items():
             self.tree.heading(col, text=text)
@@ -324,6 +328,30 @@ class PatientManagementFrame(tk.Frame):
 
         panel.grid_columnconfigure(1, weight=1)
 
+        # Clinic assignment listbox
+        row_idx = len(fields) + 1
+        tk.Label(panel, text="Clinic Assignment", bg=BG_PANEL, fg=TEXT,
+                 font=("Helvetica", 9)).grid(
+            row=row_idx, column=0, sticky="nw", pady=3)
+        loc_frame = tk.Frame(panel, bg=BG_PANEL)
+        loc_frame.grid(row=row_idx, column=1, pady=3, padx=(8, 0), sticky="ew")
+        self.loc_listbox = tk.Listbox(
+            loc_frame, selectmode="single", height=4,
+            exportselection=False, font=("Helvetica", 9),
+            bd=0, relief="flat", highlightthickness=1,
+            highlightbackground="#cde8dc", highlightcolor=ACCENT,
+            bg=CARD_BG, fg=TEXT,
+            selectbackground=ACCENT, selectforeground="white"
+        )
+        loc_sb = ttk.Scrollbar(loc_frame, orient="vertical",
+                               command=self.loc_listbox.yview)
+        self.loc_listbox.configure(yscrollcommand=loc_sb.set)
+        self.loc_listbox.pack(side="left", fill="both", expand=True)
+        loc_sb.pack(side="left", fill="y")
+        tk.Label(panel, text="Select a clinic to assign this patient",
+                 bg=BG_PANEL, fg="gray", font=("Helvetica", 8)).grid(
+            row=row_idx + 1, column=1, sticky="w", padx=(8, 0))
+
     # ------------------------------------------------------------------
     # Action bar
     # ------------------------------------------------------------------
@@ -355,15 +383,34 @@ class PatientManagementFrame(tk.Frame):
     # ------------------------------------------------------------------
     # Data methods
     # ------------------------------------------------------------------
+    def _load_locations(self):
+        try:
+            conn = get_conn()
+            rows = conn.execute(
+                "SELECT location_id, name, status FROM ClinicLocation ORDER BY name"
+            ).fetchall()
+            conn.close()
+            self.location_list.clear()
+            self.loc_listbox.delete(0, tk.END)
+            for loc_id, name, status in rows:
+                label = f"{name}  (ID {loc_id})" + (f" [{status}]" if status else "")
+                self.location_list.append((label, loc_id))
+                self.loc_listbox.insert(tk.END, label)
+        except sqlite3.Error as e:
+            messagebox.showerror("DB Error", str(e))
+
     def _load_patients(self, event=None):
         search = self.search_var.get().strip().lower()
         show_inactive = self.show_inactive_var.get()
 
         conn = get_conn()
         rows = conn.execute("""
-            SELECT patient_id, first_name, last_name, dob, phone, email, active_flag
-            FROM Patient
-            ORDER BY last_name, first_name
+            SELECT p.patient_id, p.first_name, p.last_name, p.dob, p.phone, p.email,
+                   p.active_flag,
+                   COALESCE(cl.name, '') AS clinic_name
+            FROM Patient p
+            LEFT JOIN ClinicLocation cl ON cl.location_id = p.location_id
+            ORDER BY p.last_name, p.first_name
         """).fetchall()
 
         total    = conn.execute("SELECT COUNT(*) FROM Patient").fetchone()[0]
@@ -377,19 +424,20 @@ class PatientManagementFrame(tk.Frame):
 
         self.tree.delete(*self.tree.get_children())
 
-        for pid, fn, ln, dob, phone, email, active_flag in rows:
+        for pid, fn, ln, dob, phone, email, active_flag, clinic_name in rows:
             if not show_inactive and active_flag == 0:
                 continue
             name = f"{ln}, {fn}"
             if search and search not in name.lower() \
                     and search not in (phone or "").lower() \
-                    and search not in (email or "").lower():
+                    and search not in (email or "").lower() \
+                    and search not in (clinic_name or "").lower():
                 continue
             status = "Active" if active_flag else "Inactive"
             tag    = "inactive" if not active_flag else ""
             self.tree.insert("", "end", iid=str(pid),
                              values=(pid, name, dob or "", phone or "",
-                                     email or "", status),
+                                     email or "", clinic_name or "", status),
                              tags=(tag,))
 
     def _on_select(self, _event=None):
@@ -401,15 +449,25 @@ class PatientManagementFrame(tk.Frame):
         conn = get_conn()
         row = conn.execute("""
             SELECT first_name, last_name, dob, sex, phone, email, address,
-                   allergies, conditions, medications, notes, emergency_contact
+                   allergies, conditions, medications, notes, emergency_contact,
+                   location_id
             FROM Patient WHERE patient_id = ?
         """, (self._selected_id,)).fetchone()
         conn.close()
 
         if row:
+            *fields, assigned_loc_id = row
             for i, key in enumerate(self.entries):
                 self.entries[key].delete(0, tk.END)
-                self.entries[key].insert(0, row[i] if row[i] else "")
+                self.entries[key].insert(0, fields[i] if fields[i] else "")
+
+            self.loc_listbox.selection_clear(0, tk.END)
+            if assigned_loc_id is not None:
+                for i, (_, loc_id) in enumerate(self.location_list):
+                    if loc_id == assigned_loc_id:
+                        self.loc_listbox.selection_set(i)
+                        self.loc_listbox.see(i)
+                        break
 
     def _collect(self) -> dict:
         return {k: e.get().strip() for k, e in self.entries.items()}
@@ -419,14 +477,17 @@ class PatientManagementFrame(tk.Frame):
         if not data["first_name"] or not data["last_name"]:
             messagebox.showwarning("Required", "First Name and Last Name are required.")
             return
+        sel_locs = self.loc_listbox.curselection()
+        loc_id = self.location_list[sel_locs[0]][1] if sel_locs else None
         try:
             conn = get_conn()
             conn.execute("""
                 INSERT INTO Patient (
                     first_name, last_name, dob, sex, phone, email,
-                    address, allergies, conditions, medications, notes, emergency_contact
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, tuple(data.values()))
+                    address, allergies, conditions, medications, notes,
+                    emergency_contact, location_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (*data.values(), loc_id))
             conn.commit()
             conn.close()
             messagebox.showinfo("Success", "Patient added successfully.")
@@ -443,15 +504,17 @@ class PatientManagementFrame(tk.Frame):
         if not data["first_name"] or not data["last_name"]:
             messagebox.showwarning("Required", "First Name and Last Name are required.")
             return
+        sel_locs = self.loc_listbox.curselection()
+        loc_id = self.location_list[sel_locs[0]][1] if sel_locs else None
         try:
             conn = get_conn()
             conn.execute("""
                 UPDATE Patient SET
                     first_name=?, last_name=?, dob=?, sex=?, phone=?, email=?,
                     address=?, allergies=?, conditions=?, medications=?,
-                    notes=?, emergency_contact=?
+                    notes=?, emergency_contact=?, location_id=?
                 WHERE patient_id=?
-            """, (*data.values(), self._selected_id))
+            """, (*data.values(), loc_id, self._selected_id))
             conn.commit()
             conn.close()
             messagebox.showinfo("Updated", "Patient updated successfully.")
@@ -498,6 +561,7 @@ class PatientManagementFrame(tk.Frame):
     def _clear_form(self):
         for e in self.entries.values():
             e.delete(0, tk.END)
+        self.loc_listbox.selection_clear(0, tk.END)
         self._selected_id = None
         if self.tree.selection():
             self.tree.selection_remove(self.tree.selection())
