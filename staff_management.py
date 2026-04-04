@@ -100,7 +100,7 @@ class StaffManagementFrame(tk.Frame):
         # -- White body: summary cards + split content --
         body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
         body.pack(fill="both", expand=True, padx=12, pady=(10, 12))
-        body.grid_rowconfigure(1, weight=1)
+        body.grid_rowconfigure(2, weight=1)
         body.grid_columnconfigure(0, weight=1)
 
         self._build_filter_bar(body)
