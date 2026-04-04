@@ -1,4 +1,5 @@
 import tkinter as tk
+from dashboardSandbox import DashboardFrame
 
 # ── Colour palette (identical to all other modules) ──────────────────────────
 BG_LIGHT         = "#e6f2ec"
@@ -27,6 +28,8 @@ class MainApp(tk.Tk):
         self._build_ui()
 
     def _build_ui(self):
+        for w in self.winfo_children():
+            w.destroy()
         outer = tk.Frame(self, bg=BG_LIGHT)
         outer.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -83,17 +86,26 @@ class MainApp(tk.Tk):
         self._make_role_card(card_row, "👤", "Staff Portal",
                              ["Patient records & scheduling",
                               "Billing & payments",
-                              "Medical records"])
+                              "Medical records"],
+                             command=lambda: self._show_dashboard("Staff"))
 
         tk.Frame(card_row, bg=BG_PANEL, width=32).pack(side="left")
 
         self._make_role_card(card_row, "🛡", "Admin Portal",
                              ["Full system access",
                               "Staff accounts & roles",
-                              "All modules & configuration"])
+                              "All modules & configuration"],
+                             command=lambda: self._show_dashboard("Admin"))
 
     # ── Role card ─────────────────────────────────────────────────────────────
-    def _make_role_card(self, parent, icon, role, lines):
+    def _show_dashboard(self, role):
+        for w in self.winfo_children():
+            w.destroy()
+        frame = DashboardFrame(self, role=role, back_cmd=self._build_ui)
+        frame.pack(fill="both", expand=True)
+
+    # ── Role card ─────────────────────────────────────────────────────────────
+    def _make_role_card(self, parent, icon, role, lines, command=None):
         card = tk.Frame(parent, bg=CARD_BG, bd=1, relief="solid",
                         width=260, height=210, cursor="hand2")
         card.pack(side="left")
@@ -133,6 +145,8 @@ class MainApp(tk.Tk):
         for w in hover:
             w.bind("<Enter>", on_enter)
             w.bind("<Leave>", on_leave)
+            if command:
+                w.bind("<Button-1>", lambda _, cmd=command: cmd())
 
 
 if __name__ == "__main__":

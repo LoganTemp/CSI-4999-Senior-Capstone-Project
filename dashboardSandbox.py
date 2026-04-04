@@ -205,6 +205,141 @@ class CareFlowDashboard(tk.Tk):
             btn_view.pack(side="left", padx=4)
             btn_edit.pack(side="left", padx=4)
 
+# ---------- Embeddable frame (used by main.py) ----------
+class DashboardFrame(tk.Frame):
+    ADMIN_NAV = ["Dashboard", "Patient", "Staff", "Clinic", "Records", "Billing"]
+    STAFF_NAV = ["Dashboard", "Patient", "Records", "Billing"]
+
+    _SB       = "#5FAF90"   # sidebar green
+    _SB_LIGHT = "#A2DDC6"   # sidebar highlight
+
+    def __init__(self, parent, role="Admin", back_cmd=None):
+        super().__init__(parent, bg=BG_LIGHT)
+        self.role     = role
+        self.back_cmd = back_cmd
+        self._build()
+
+    def _build(self):
+        nav_items    = self.ADMIN_NAV if self.role == "Admin" else self.STAFF_NAV
+        portal_label = "Admin Portal" if self.role == "Admin" else "Staff Portal"
+
+        # ── Outer wrapper — matches staff_management padx=20, pady=20 ─────────
+        outer = tk.Frame(self, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # ── Sidebar ──────────────────────────────────────────────────────────
+        sidebar = tk.Frame(outer, bg=self._SB, width=170)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        logo_box = tk.Frame(sidebar, bg=self._SB_LIGHT, bd=1, relief="solid")
+        logo_box.pack(fill="x", padx=10, pady=(12, 10))
+        tk.Label(logo_box, text=f"CareFlow\n{portal_label}",
+                 bg=self._SB_LIGHT, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), justify="left",
+                 padx=8, pady=8).pack(anchor="w")
+
+        for item in nav_items:
+            bg = self._SB_LIGHT if item == "Dashboard" else self._SB
+            tk.Button(sidebar, text=item, bg=bg, fg=TEXT,
+                      font=("Helvetica", 10), anchor="w", padx=10, pady=6,
+                      relief="flat", activebackground=self._SB_LIGHT,
+                      cursor="hand2",
+                      command=lambda l=item: on_nav(l)).pack(fill="x", padx=10, pady=2)
+
+        if self.back_cmd:
+            tk.Button(sidebar, text="← Back", bg=self._SB, fg=TEXT,
+                      font=("Helvetica", 10), anchor="w", padx=10, pady=6,
+                      relief="flat", activebackground=self._SB_LIGHT,
+                      cursor="hand2",
+                      command=self.back_cmd).pack(side="bottom", fill="x",
+                                                   padx=10, pady=(0, 12))
+
+        # ── Main area — same structure as staff_management ───────────────────
+        main = tk.Frame(outer, bg=BG_LIGHT)
+        main.pack(side="left", fill="both", expand=True, padx=(12, 0))
+
+        # White header bar
+        header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        header.pack(fill="x")
+        tk.Label(header, text="Dashboard Overview",
+                 bg=BG_PANEL, fg=TEXT, font=FONT_TITLE).pack(side="left", padx=14, pady=14)
+        tk.Label(header, text="Signed in as: Administrator",
+                 bg=BG_PANEL, fg=TEXT,
+                 font=("Helvetica", 10)).pack(side="right", padx=14, pady=14)
+
+        # White body panel
+        body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        body.pack(fill="both", expand=True, pady=(10, 0))
+
+        content = tk.Frame(body, bg=BG_PANEL)
+        content.pack(fill="both", expand=True, padx=12, pady=12)
+
+        cards_frame = tk.Frame(content, bg=BG_PANEL)
+        cards_frame.pack(fill="x", pady=(0, 12))
+
+        for label, value in [("Active Clinics", "12"), ("Total Patients", "234"),
+                              ("Active Staff", "27"),   ("Unpaid Billing", "$1,540")]:
+            card = tk.Frame(cards_frame, bg=CARD_BG, bd=1, relief="raised",
+                            width=200, height=70)
+            card.pack(side="left", padx=(0, 8), pady=6)
+            card.pack_propagate(False)
+            tk.Label(card, text=value, bg=CARD_BG, fg=TEXT,
+                     font=FONT_CARD_NUM).pack(anchor="nw", padx=10, pady=(8, 0))
+            tk.Button(card, text=label, bg=CARD_BG, fg=TEXT, font=FONT_CARD_LABEL,
+                      relief="flat",
+                      command=lambda l=label: on_card_click(l)).pack(anchor="nw", padx=10, pady=(0, 8))
+
+        tk.Label(content, text="Section Title",
+                 bg=BG_PANEL, fg=TEXT, font=FONT_HEADER).pack(anchor="w", pady=(6, 4))
+
+        table_container = tk.Frame(content, bg=BG_PANEL, bd=1, relief="solid")
+        table_container.pack(fill="both", expand=True, pady=(0, 8))
+
+        header_frame = tk.Frame(table_container, bg="#f0f0f0")
+        header_frame.pack(fill="x")
+        for h in ["ID", "CLINIC NAME", "ADDRESS", "CITY", "PHONE", "STATUS", "ACTION"]:
+            tk.Label(header_frame, text=h, bg="#f0f0f0", font=FONT_TABLE,
+                     borderwidth=1, relief="flat").pack(side="left", padx=6, pady=6)
+
+        body_frame = tk.Frame(table_container, bg=BG_PANEL)
+        body_frame.pack(fill="both", expand=True)
+        canvas    = tk.Canvas(body_frame, bg=BG_PANEL, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(body_frame, orient="vertical", command=canvas.yview)
+        scrollable = tk.Frame(canvas, bg=BG_PANEL)
+        scrollable.bind("<Configure>",
+                        lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        for r in [{"id": "1", "clinic": "Northside Health", "address": "123 Maple St",
+                   "city": "Springfield", "phone": "555-0123", "status": "Active"},
+                  {"id": "2", "clinic": "River Clinic", "address": "98 River Rd",
+                   "city": "Lakeview",    "phone": "555-0789", "status": "Inactive"}]:
+            self._add_row(scrollable, r)
+        for _ in range(8):
+            self._add_row(scrollable, {})
+
+    def _add_row(self, parent, row):
+        row_frame = tk.Frame(parent, bg=BG_PANEL, pady=6)
+        row_frame.pack(fill="x", padx=4)
+        for text, width in [(row.get("id",""),6),(row.get("clinic",""),24),
+                            (row.get("address",""),30),(row.get("city",""),18),
+                            (row.get("phone",""),14),(row.get("status",""),12)]:
+            tk.Label(row_frame, text=text, bg=BG_PANEL, font=FONT_TABLE,
+                     width=width, anchor="w").pack(side="left", padx=6)
+        af = tk.Frame(row_frame, bg=BG_PANEL, width=120)
+        af.pack(side="left", padx=6)
+        if str(row.get("id","")).strip():
+            vid = row["id"]
+            tk.Button(af, text="View",
+                      command=lambda i=vid: on_action_view(i)).pack(side="left", padx=4)
+            tk.Button(af, text="Edit",
+                      command=lambda i=vid: on_action_edit(i)).pack(side="left", padx=4)
+
+
 # ---------- Main ----------
 if __name__ == "__main__":
     app = CareFlowDashboard()
