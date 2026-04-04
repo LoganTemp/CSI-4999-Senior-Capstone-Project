@@ -531,9 +531,10 @@ class CareFlowRecords(tk.Tk):
 
 # ── Embeddable frame used by main.py portal ──────────────────────────
 class RecordsFrame(tk.Frame):
-    def __init__(self, parent, controller=None):
+    def __init__(self, parent, controller=None, role="Admin"):
         super().__init__(parent, bg=BG_LIGHT)
         self.controller = controller
+        self.role = role
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
@@ -547,20 +548,29 @@ class RecordsFrame(tk.Frame):
         sidebar.grid(row=0, column=0, rowspan=2, sticky="nsw")
         sidebar.grid_propagate(False)
 
+        portal_label = "Staff Portal" if self.role == "Staff" else "Admin Portal"
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
         logo_box.pack(fill="x", padx=10, pady=(12, 10))
-        tk.Label(logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+        tk.Label(logo_box, text=f"CareFlow\n{portal_label}", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
                  font=("Helvetica", 9, "bold"), justify="left",
                  padx=8, pady=8).pack(anchor="w")
 
-        nav_map = {
-            "Dashboard": "HomePage",
-            "Patient":   "PatientMenuPage",
-            "Staff":     "StaffMenuPage",
-            "Clinic":    "LocationMenuPage",
-            "Records":   None,
-            "Billing":   "BillingMenuPage",
-        }
+        if self.role == "Staff":
+            nav_map = {
+                "Dashboard": "HomePage",
+                "Patient":   "PatientMenuPage",
+                "Records":   None,
+                "Billing":   "BillingMenuPage",
+            }
+        else:
+            nav_map = {
+                "Dashboard": "HomePage",
+                "Patient":   "PatientMenuPage",
+                "Staff":     "StaffMenuPage",
+                "Clinic":    "LocationMenuPage",
+                "Records":   None,
+                "Billing":   "BillingMenuPage",
+            }
         for item, page in nav_map.items():
             is_active = item == "Records"
             bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR

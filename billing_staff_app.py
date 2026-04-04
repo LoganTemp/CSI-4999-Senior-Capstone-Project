@@ -79,9 +79,10 @@ def is_valid_date_yyyy_mm_dd(s: str) -> bool:
 
 
 class BillingFrame(tk.Frame):
-    def __init__(self, parent=None, controller=None):
+    def __init__(self, parent=None, controller=None, role="Admin"):
         super().__init__(parent, bg=BG_LIGHT)
         self.controller = controller
+        self.role = role
         self.conn = sqlite3.connect(DB_NAME)
         ensure_schema(self.conn)
 
@@ -117,21 +118,30 @@ class BillingFrame(tk.Frame):
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
+        portal_label = "Staff Portal" if self.role == "Staff" else "Admin Portal"
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
         logo_box.pack(fill="x", padx=10, pady=(12, 10))
         tk.Label(
-            logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+            logo_box, text=f"CareFlow\n{portal_label}", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
             font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8
         ).pack(anchor="w")
 
-        nav_map = {
-            "Dashboard": "HomePage",
-            "Patient":   None,
-            "Staff":     "StaffMenuPage",
-            "Clinic":    "LocationMenuPage",
-            "Records":   "RecordsMenuPage",
-            "Billing":   None,
-        }
+        if self.role == "Staff":
+            nav_map = {
+                "Dashboard": "HomePage",
+                "Patient":   None,
+                "Records":   "RecordsMenuPage",
+                "Billing":   None,
+            }
+        else:
+            nav_map = {
+                "Dashboard": "HomePage",
+                "Patient":   None,
+                "Staff":     "StaffMenuPage",
+                "Clinic":    "LocationMenuPage",
+                "Records":   "RecordsMenuPage",
+                "Billing":   None,
+            }
         for item, page in nav_map.items():
             is_active = item == active_label
             bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
