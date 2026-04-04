@@ -109,7 +109,7 @@ class StaffManagementFrame(tk.Frame):
 
         nav_map = {
             "Dashboard": "HomePage",
-            "Patient":   None,
+            "Patient":   "PatientMenuPage",
             "Staff":     None,
             "Clinic":    "LocationMenuPage",
             "Records":   "RecordsMenuPage",

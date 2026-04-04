@@ -3,6 +3,7 @@ from dashboardSandbox    import DashboardFrame
 from staff_management    import StaffManagementFrame
 from clinic_location     import ClinicFrame
 from records             import RecordsFrame
+from patient_management  import PatientManagementFrame
 from billing_staff_app   import BillingFrame as StaffBillingFrame
 from billing_patient_app import BillingFrame as PatientBillingFrame
 
@@ -16,6 +17,8 @@ class PortalController:
     def show_frame(self, name):
         if name == "HomePage":
             self._app._show_dashboard(self._role)
+        elif name == "PatientMenuPage":
+            self._app._portal_nav("Patient", self._role)
         elif name == "StaffMenuPage":
             self._app._portal_nav("Staff", self._role)
         elif name == "LocationMenuPage":
@@ -73,14 +76,14 @@ class BillingLandingFrame(tk.Frame):
         if self.role == "Staff":
             nav_map = {
                 "Dashboard": "HomePage",
-                "Patient":   None,
+                "Patient":   "PatientMenuPage",
                 "Records":   "RecordsMenuPage",
                 "Billing":   None,
             }
         else:
             nav_map = {
                 "Dashboard": "HomePage",
-                "Patient":   None,
+                "Patient":   "PatientMenuPage",
                 "Staff":     "StaffMenuPage",
                 "Clinic":    "LocationMenuPage",
                 "Records":   "RecordsMenuPage",
@@ -279,7 +282,9 @@ class MainApp(tk.Tk):
         ctrl = PortalController(self, role)
         for w in self.winfo_children():
             w.destroy()
-        if item == "Staff":
+        if item == "Patient":
+            f = PatientManagementFrame(self, controller=ctrl, role=role)
+        elif item == "Staff":
             f = StaffManagementFrame(self, controller=ctrl)
         elif item == "Clinic":
             f = ClinicFrame(self, controller=ctrl)

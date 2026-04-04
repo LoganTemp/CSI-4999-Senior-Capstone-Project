@@ -129,14 +129,14 @@ class BillingFrame(tk.Frame):
         if self.role == "Staff":
             nav_map = {
                 "Dashboard": "HomePage",
-                "Patient":   None,
+                "Patient":   "PatientMenuPage",
                 "Records":   "RecordsMenuPage",
                 "Billing":   None,
             }
         else:
             nav_map = {
                 "Dashboard": "HomePage",
-                "Patient":   None,
+                "Patient":   "PatientMenuPage",
                 "Staff":     "StaffMenuPage",
                 "Clinic":    "LocationMenuPage",
                 "Records":   "RecordsMenuPage",

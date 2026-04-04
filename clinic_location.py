@@ -440,7 +440,7 @@ class ClinicFrame(tk.Frame, _ClinicBase):
 
         nav_map = {
             "Dashboard": "HomePage",
-            "Patient":   None,
+            "Patient":   "PatientMenuPage",
             "Staff":     "StaffMenuPage",
             "Clinic":    None,
             "Records":   "RecordsMenuPage",

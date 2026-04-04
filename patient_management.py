@@ -75,9 +75,10 @@ def ensure_patient_table() -> None:
 # Patient Management Frame
 # ==============================
 class PatientManagementFrame(tk.Frame):
-    def __init__(self, parent=None, controller=None):
+    def __init__(self, parent=None, controller=None, role="Admin"):
         super().__init__(parent, bg=BG_LIGHT)
         self.controller = controller
+        self.role = role
 
         ensure_patient_table()
 
@@ -128,19 +129,29 @@ class PatientManagementFrame(tk.Frame):
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
+        portal_label = "Staff Portal" if self.role == "Staff" else "Admin Portal"
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
         logo_box.pack(fill="x", padx=10, pady=(12, 10))
-        tk.Label(logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+        tk.Label(logo_box, text=f"CareFlow\n{portal_label}", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
                  font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8).pack(anchor="w")
 
-        nav_map = {
-            "Dashboard": "HomePage",
-            "Patient":   None,
-            "Staff":     "StaffManagementPage",
-            "Clinic":    "LocationMenuPage",
-            "Records":   "MedicalRecordsPage",
-            "Billing":   "BillingMenuPage",
-        }
+        if self.role == "Staff":
+            nav_map = {
+                "Dashboard": "HomePage",
+                "Patient":   None,
+                "Records":   "RecordsMenuPage",
+                "Billing":   "BillingMenuPage",
+            }
+        else:
+            nav_map = {
+                "Dashboard": "HomePage",
+                "Patient":   None,
+                "Staff":     "StaffMenuPage",
+                "Clinic":    "LocationMenuPage",
+                "Records":   "RecordsMenuPage",
+                "Billing":   "BillingMenuPage",
+            }
+
         for item, page in nav_map.items():
             is_active = item == "Patient"
             bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
@@ -160,9 +171,12 @@ class PatientManagementFrame(tk.Frame):
                 tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
                          anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
 
-        tk.Label(sidebar, text="Signed in as:\nAdmin", bg=BG_SIDEBAR, fg=TEXT,
-                 font=("Helvetica", 9), justify="left"
-                 ).pack(side="bottom", anchor="w", padx=10, pady=12)
+        if self.controller:
+            tk.Button(sidebar, text="← Dashboard", bg=BG_SIDEBAR, fg=TEXT,
+                      font=FONT_SMALL, relief="flat", anchor="w",
+                      padx=12, pady=6, cursor="hand2",
+                      command=lambda: self.controller.show_frame("HomePage")
+                      ).pack(side="bottom", fill="x", padx=10, pady=(0, 12))
 
     # ------------------------------------------------------------------
     # Filter / summary bar

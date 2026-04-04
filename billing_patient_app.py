@@ -137,7 +137,7 @@ class BillingFrame(tk.Frame):
 
         nav_map = {
             "Dashboard": "HomePage",
-            "Patient":   None,
+            "Patient":   "PatientMenuPage",
             "Staff":     "StaffMenuPage",
             "Clinic":    "LocationMenuPage",
             "Records":   "RecordsMenuPage",
