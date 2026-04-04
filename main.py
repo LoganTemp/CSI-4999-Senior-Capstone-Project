@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 from dashboardSandbox    import DashboardFrame
 from staff_management    import StaffManagementFrame
 from clinic_location     import ClinicFrame
@@ -220,14 +221,19 @@ class MainApp(tk.Tk):
 
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
         logo_box.pack(fill="x", padx=10, pady=(12, 10))
-        tk.Label(logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT,
+        tk.Label(logo_box, text="CareFlow\nPortal", bg=BG_SIDEBAR_LIGHT,
                  fg=TEXT, font=("Helvetica", 9, "bold"), justify="left",
                  padx=8, pady=8).pack(anchor="w")
 
+        def _role_required():
+            messagebox.showinfo("Role Required", "You must select your role first.")
+
         for item in ["Dashboard", "Patient", "Staff", "Clinic", "Records", "Billing"]:
-            tk.Label(sidebar, text=item, bg=BG_SIDEBAR, fg=TEXT,
-                     font=FONT_SMALL, anchor="w",
-                     padx=10, pady=6).pack(fill="x", padx=10, pady=2)
+            tk.Button(sidebar, text=item, bg=BG_SIDEBAR, fg=TEXT,
+                      font=FONT_SMALL, anchor="w", padx=10, pady=6,
+                      relief="flat", activebackground=BG_SIDEBAR_LIGHT,
+                      cursor="hand2",
+                      command=_role_required).pack(fill="x", padx=10, pady=2)
 
     # ── Main content area ─────────────────────────────────────────────────────
     def _build_main(self, parent):
