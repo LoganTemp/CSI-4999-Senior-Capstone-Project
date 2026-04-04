@@ -529,6 +529,71 @@ class CareFlowRecords(tk.Tk):
             messagebox.showerror("Error", str(e))
 
 
+# ── Embeddable frame used by main.py portal ──────────────────────────
+class RecordsFrame(tk.Frame):
+    def __init__(self, parent, controller=None):
+        super().__init__(parent, bg=BG_LIGHT)
+        self.controller = controller
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+
+        ensure_records_table_exists()
+        self._build_sidebar()
+        self._build_header()
+        self._build_content()
+
+    def _build_sidebar(self):
+        sidebar = tk.Frame(self, bg=BG_SIDEBAR, width=SIDEBAR_WIDTH)
+        sidebar.grid(row=0, column=0, rowspan=2, sticky="nsw")
+        sidebar.grid_propagate(False)
+
+        logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
+        logo_box.pack(fill="x", padx=10, pady=(12, 10))
+        tk.Label(logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), justify="left",
+                 padx=8, pady=8).pack(anchor="w")
+
+        nav_map = {
+            "Dashboard": "HomePage",
+            "Patient":   "PatientMenuPage",
+            "Staff":     "StaffMenuPage",
+            "Clinic":    "LocationMenuPage",
+            "Records":   None,
+            "Billing":   "BillingMenuPage",
+        }
+        for item, page in nav_map.items():
+            is_active = item == "Records"
+            bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
+
+            def make_cmd(p=page):
+                if p and self.controller:
+                    return lambda: self.controller.show_frame(p)
+                return None
+
+            cmd = make_cmd()
+            if cmd:
+                tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_NAV,
+                          anchor="w", padx=10, pady=6, relief="flat",
+                          activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
+                          command=cmd).pack(fill="x", padx=10, pady=2)
+            else:
+                tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_NAV,
+                         anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
+
+        if self.controller:
+            tk.Button(sidebar, text="← Dashboard", bg=BG_SIDEBAR, fg=TEXT,
+                      font=FONT_NAV, relief="flat", anchor="w",
+                      padx=12, pady=6, cursor="hand2",
+                      command=lambda: self.controller.show_frame("HomePage")
+                      ).pack(side="bottom", fill="x", padx=10, pady=(0, 12))
+
+
+# Copy all methods except _build_sidebar from CareFlowRecords onto RecordsFrame
+for _n, _v in vars(CareFlowRecords).items():
+    if not _n.startswith('__') and callable(_v) and _n != '_build_sidebar':
+        setattr(RecordsFrame, _n, _v)
+
+
 # ==============================
 # Main
 # ==============================

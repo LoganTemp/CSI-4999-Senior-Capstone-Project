@@ -79,8 +79,9 @@ def is_valid_date_yyyy_mm_dd(s: str) -> bool:
 
 
 class BillingFrame(tk.Frame):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, controller=None):
         super().__init__(parent, bg=BG_LIGHT)
+        self.controller = controller
         self.conn = sqlite3.connect(DB_NAME)
         ensure_schema(self.conn)
 
@@ -119,18 +120,43 @@ class BillingFrame(tk.Frame):
         logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
         logo_box.pack(fill="x", padx=10, pady=(12, 10))
         tk.Label(
-            logo_box, text="CareFlow\nStaff Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+            logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
             font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8
         ).pack(anchor="w")
 
-        items = ["Dashboard", "Patient", "Staff", "Clinic", "Records", "Billing"]
-        for item in items:
-            self._sidebar_button(sidebar, item, active=(item == active_label)).pack(fill="x", padx=10, pady=2)
+        nav_map = {
+            "Dashboard": "HomePage",
+            "Patient":   None,
+            "Staff":     "StaffMenuPage",
+            "Clinic":    "LocationMenuPage",
+            "Records":   "RecordsMenuPage",
+            "Billing":   None,
+        }
+        for item, page in nav_map.items():
+            is_active = item == active_label
+            bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
 
-        tk.Label(
-            sidebar, text=f"Signed in as:\n{self.logged_in_staff_name or 'Staff'}",
-            bg=BG_SIDEBAR, fg=TEXT, font=FONT_SMALL, justify="left"
-        ).pack(side="bottom", anchor="w", padx=10, pady=12)
+            def make_cmd(p=page):
+                if p and self.controller:
+                    return lambda: self.controller.show_frame(p)
+                return None
+
+            cmd = make_cmd()
+            if cmd:
+                tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                          anchor="w", padx=10, pady=6, relief="flat",
+                          activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
+                          command=cmd).pack(fill="x", padx=10, pady=2)
+            else:
+                tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                         anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
+
+        if self.controller:
+            tk.Button(sidebar, text="← Dashboard", bg=BG_SIDEBAR, fg=TEXT,
+                      font=FONT_BTN, relief="flat", anchor="w",
+                      padx=12, pady=6, cursor="hand2",
+                      command=lambda: self.controller.show_frame("HomePage")
+                      ).pack(side="bottom", fill="x", padx=10, pady=(0, 12))
 
         return sidebar
 

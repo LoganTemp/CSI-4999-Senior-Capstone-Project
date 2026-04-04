@@ -1,11 +1,14 @@
 import tkinter as tk
-from dashboardSandbox  import DashboardFrame
-from staff_management  import StaffManagementFrame
-from clinic_location   import ClinicFrame
+from dashboardSandbox    import DashboardFrame
+from staff_management    import StaffManagementFrame
+from clinic_location     import ClinicFrame
+from records             import RecordsFrame
+from billing_staff_app   import BillingFrame as StaffBillingFrame
+from billing_patient_app import BillingFrame as PatientBillingFrame
 
 
 class PortalController:
-    """Minimal controller so StaffManagementFrame sidebar nav can go back to dashboard."""
+    """Minimal controller so embedded frames can navigate back to the portal."""
     def __init__(self, app, role):
         self._app  = app
         self._role = role
@@ -17,8 +20,16 @@ class PortalController:
             self._app._portal_nav("Staff", self._role)
         elif name == "LocationMenuPage":
             self._app._portal_nav("Clinic", self._role)
+        elif name == "RecordsMenuPage":
+            self._app._portal_nav("Records", self._role)
+        elif name == "BillingMenuPage":
+            self._app._portal_nav("Billing", self._role)
+        elif name == "StaffBillingPage":
+            self._app._portal_nav("StaffBilling", self._role)
+        elif name == "PatientBillingPage":
+            self._app._portal_nav("PatientBilling", self._role)
 
-# ── Colour palette (identical to all other modules) ──────────────────────────
+# ── Colour palette ────────────────
 BG_LIGHT         = "#e6f2ec"
 BG_SIDEBAR       = "#5FAF90"
 BG_SIDEBAR_LIGHT = "#A2DDC6"
@@ -33,6 +44,142 @@ FONT_HEADER = ("Helvetica", 13, "bold")
 FONT_LOGO   = ("Helvetica", 13, "bold")
 FONT_SMALL  = ("Helvetica", 10)
 FONT_CARD   = ("Helvetica", 13, "bold")
+
+
+class BillingLandingFrame(tk.Frame):
+    """Landing page to choose between Staff Billing and Patient Billing."""
+    def __init__(self, parent, controller=None):
+        super().__init__(parent, bg=BG_LIGHT)
+        self.controller = controller
+        self._build_ui()
+
+    def _build_ui(self):
+        outer = tk.Frame(self, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # Sidebar
+        sidebar = tk.Frame(outer, bg=BG_SIDEBAR, width=170)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
+        logo_box.pack(fill="x", padx=10, pady=(12, 10))
+        tk.Label(logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), justify="left",
+                 padx=8, pady=8).pack(anchor="w")
+
+        nav_map = {
+            "Dashboard": "HomePage",
+            "Patient":   None,
+            "Staff":     "StaffMenuPage",
+            "Clinic":    "LocationMenuPage",
+            "Records":   "RecordsMenuPage",
+            "Billing":   None,
+        }
+        for item, page in nav_map.items():
+            is_active = item == "Billing"
+            bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
+
+            def make_cmd(p=page):
+                if p and self.controller:
+                    return lambda: self.controller.show_frame(p)
+                return None
+
+            cmd = make_cmd()
+            if cmd:
+                tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
+                          anchor="w", padx=10, pady=6, relief="flat",
+                          activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
+                          command=cmd).pack(fill="x", padx=10, pady=2)
+            else:
+                tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
+                         anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
+
+        if self.controller:
+            tk.Button(sidebar, text="← Dashboard", bg=BG_SIDEBAR, fg=TEXT,
+                      font=FONT_SMALL, relief="flat", anchor="w",
+                      padx=12, pady=6, cursor="hand2",
+                      command=lambda: self.controller.show_frame("HomePage")
+                      ).pack(side="bottom", fill="x", padx=10, pady=(0, 12))
+
+        # Main panel
+        main = tk.Frame(outer, bg=BG_LIGHT)
+        main.pack(side="left", fill="both", expand=True, padx=(12, 0))
+
+        header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        header.pack(fill="x")
+        tk.Label(header, text="Billing", bg=BG_PANEL, fg=TEXT,
+                 font=FONT_TITLE).pack(side="left", padx=14, pady=14)
+
+        body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        body.pack(fill="both", expand=True, pady=(10, 0))
+
+        center = tk.Frame(body, bg=BG_PANEL)
+        center.place(relx=0.5, rely=0.5, anchor="center")
+
+        tk.Label(center, text="Select a billing portal",
+                 bg=BG_PANEL, fg=TEXT, font=("Helvetica", 15, "bold")).pack(pady=(0, 4))
+        tk.Label(center, text="Choose whether you are managing staff bills or patient bills.",
+                 bg=BG_PANEL, fg=BTN_NEUTRAL, font=FONT_SMALL).pack(pady=(0, 28))
+
+        card_row = tk.Frame(center, bg=BG_PANEL)
+        card_row.pack()
+
+        self._make_card(card_row, "🧾", "Staff Billing",
+                        ["Create and manage bills",
+                         "Link bills to staff accounts",
+                         "Track payment status"],
+                        command=lambda: self.controller.show_frame("StaffBillingPage") if self.controller else None)
+
+        tk.Frame(card_row, bg=BG_PANEL, width=32).pack(side="left")
+
+        self._make_card(card_row, "👤", "Patient Billing",
+                        ["View your outstanding bills",
+                         "Make payments",
+                         "Download receipts"],
+                        command=lambda: self.controller.show_frame("PatientBillingPage") if self.controller else None)
+
+    def _make_card(self, parent, icon, title, lines, command=None):
+        card = tk.Frame(parent, bg=CARD_BG, bd=1, relief="solid",
+                        width=240, height=200, cursor="hand2")
+        card.pack(side="left")
+        card.pack_propagate(False)
+
+        strip = tk.Frame(card, bg=BG_SIDEBAR_LIGHT, height=5)
+        strip.pack(fill="x")
+
+        icon_lbl = tk.Label(card, text=icon, bg=CARD_BG, fg=TEXT, font=("Helvetica", 34))
+        icon_lbl.pack(pady=(14, 4))
+
+        title_lbl = tk.Label(card, text=title, bg=CARD_BG, fg=TEXT, font=FONT_CARD)
+        title_lbl.pack()
+
+        tk.Frame(card, bg=BG_SIDEBAR_LIGHT, height=1).pack(fill="x", padx=20, pady=(6, 6))
+
+        line_labels = []
+        for line in lines:
+            lbl = tk.Label(card, text=line, bg=CARD_BG, fg=TEXT,
+                           font=("Helvetica", 9), justify="center")
+            lbl.pack()
+            line_labels.append(lbl)
+
+        hover = [card, icon_lbl, title_lbl] + line_labels
+
+        def on_enter(_):
+            card.configure(bg=BG_SIDEBAR_LIGHT)
+            for w in hover[1:]:
+                w.configure(bg=BG_SIDEBAR_LIGHT)
+
+        def on_leave(_):
+            card.configure(bg=CARD_BG)
+            for w in hover[1:]:
+                w.configure(bg=CARD_BG)
+
+        for w in hover:
+            w.bind("<Enter>", on_enter)
+            w.bind("<Leave>", on_leave)
+            if command:
+                w.bind("<Button-1>", lambda _, cmd=command: cmd())
 
 
 class MainApp(tk.Tk):
@@ -53,7 +200,6 @@ class MainApp(tk.Tk):
         self._build_sidebar(outer)
         self._build_main(outer)
 
-    # ── Sidebar — matches staff_management.py exactly ─────────────────────────
     def _build_sidebar(self, parent):
         sidebar = tk.Frame(parent, bg=BG_SIDEBAR, width=170)
         sidebar.pack(side="left", fill="y")
@@ -75,7 +221,6 @@ class MainApp(tk.Tk):
         main = tk.Frame(parent, bg=BG_LIGHT)
         main.pack(side="left", fill="both", expand=True, padx=(12, 0))
 
-        # White header — same as every other page
         header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
         header.pack(fill="x")
         tk.Label(header, text="Welcome to CareFlow", font=FONT_TITLE,
@@ -84,11 +229,9 @@ class MainApp(tk.Tk):
                  bg=BG_PANEL, fg=BTN_NEUTRAL,
                  font=("Helvetica", 10)).pack(side="left", pady=14)
 
-        # White body panel
         body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
         body.pack(fill="both", expand=True, pady=(10, 0))
 
-        # Centered role selection
         center = tk.Frame(body, bg=BG_PANEL)
         center.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -114,7 +257,6 @@ class MainApp(tk.Tk):
                               "All modules & configuration"],
                              command=lambda: self._show_dashboard("Admin"))
 
-    # ── Role card ─────────────────────────────────────────────────────────────
     def _show_dashboard(self, role):
         for w in self.winfo_children():
             w.destroy()
@@ -124,20 +266,28 @@ class MainApp(tk.Tk):
         frame.pack(fill="both", expand=True)
 
     def _portal_nav(self, item, role):
+        ctrl = PortalController(self, role)
+        for w in self.winfo_children():
+            w.destroy()
         if item == "Staff":
-            for w in self.winfo_children():
-                w.destroy()
-            f = StaffManagementFrame(self, controller=PortalController(self, role))
-            f.pack(fill="both", expand=True)
+            f = StaffManagementFrame(self, controller=ctrl)
         elif item == "Clinic":
-            for w in self.winfo_children():
-                w.destroy()
-            f = ClinicFrame(self, controller=PortalController(self, role))
-            f.pack(fill="both", expand=True)
+            f = ClinicFrame(self, controller=ctrl)
+        elif item == "Records":
+            f = RecordsFrame(self, controller=ctrl)
+        elif item == "Billing":
+            f = BillingLandingFrame(self, controller=ctrl)
+        elif item == "StaffBilling":
+            f = StaffBillingFrame(self, controller=ctrl)
+        elif item == "PatientBilling":
+            f = PatientBillingFrame(self, controller=ctrl)
         elif item == "Dashboard":
             self._show_dashboard(role)
+            return
+        else:
+            return
+        f.pack(fill="both", expand=True)
 
-    # ── Role card ─────────────────────────────────────────────────────────────
     def _make_role_card(self, parent, icon, role, lines, command=None):
         card = tk.Frame(parent, bg=CARD_BG, bd=1, relief="solid",
                         width=260, height=210, cursor="hand2")

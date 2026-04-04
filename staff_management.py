@@ -109,10 +109,10 @@ class StaffManagementFrame(tk.Frame):
 
         nav_map = {
             "Dashboard": "HomePage",
-            "Patient":   "PatientMenuPage",
+            "Patient":   None,
             "Staff":     None,
             "Clinic":    "LocationMenuPage",
-            "Records":   "MedicalRecordsPage",
+            "Records":   "RecordsMenuPage",
             "Billing":   "BillingMenuPage",
         }
         for item, page in nav_map.items():
@@ -134,9 +134,12 @@ class StaffManagementFrame(tk.Frame):
                 tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
                          anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
 
-        tk.Label(sidebar, text="Signed in as:\nAdmin", bg=BG_SIDEBAR, fg=TEXT,
-                 font=("Helvetica", 9), justify="left"
-                 ).pack(side="bottom", anchor="w", padx=10, pady=12)
+        if self.controller:
+            tk.Button(sidebar, text="← Dashboard", bg=BG_SIDEBAR, fg=TEXT,
+                      font=FONT_SMALL, relief="flat", anchor="w",
+                      padx=12, pady=6, cursor="hand2",
+                      command=lambda: self.controller.show_frame("HomePage")
+                      ).pack(side="bottom", fill="x", padx=10, pady=(0, 12))
 
     # --------------------------------------------------------- Filter bar --
     def _build_filter_bar(self, parent):
