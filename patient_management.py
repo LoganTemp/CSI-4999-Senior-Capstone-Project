@@ -2,8 +2,8 @@
 """
 careflow_patients_updated.py
 
-CareFlow Patient Management page — with Active / Inactive summary cards
-matching the Staff Management page style.
+CareFlow Patient Management page — refactored to match StaffManagementFrame
+pattern: tk.Frame subclass with optional controller for navigation.
 """
 
 import tkinter as tk
@@ -27,7 +27,7 @@ BTN_INFO         = "#2980b9"
 BTN_WARN         = "#f39c12"
 BTN_NEUTRAL      = "#95a5a6"
 
-SIDEBAR_WIDTH = 160
+SIDEBAR_WIDTH = 170
 FONT_TITLE    = ("Helvetica", 18, "bold")
 FONT_HEADER   = ("Helvetica", 13, "bold")
 FONT_TABLE    = ("Helvetica", 10)
@@ -71,19 +71,13 @@ def ensure_patient_table() -> None:
     conn.close()
 
 
-def on_nav(name: str):
-    print(f"[NAV] {name} clicked")
-
-
 # ==============================
-# Main Window
+# Patient Management Frame
 # ==============================
-class CareFlowPatients(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("CareFlow Admin Portal – Patients")
-        self.geometry("1200x720")
-        self.configure(bg=BG_LIGHT)
+class PatientManagementFrame(tk.Frame):
+    def __init__(self, parent=None, controller=None):
+        super().__init__(parent, bg=BG_LIGHT)
+        self.controller = controller
 
         ensure_patient_table()
 
@@ -92,96 +86,95 @@ class CareFlowPatients(tk.Tk):
         self._active_var   = tk.StringVar(value="0")
         self._inactive_var = tk.StringVar(value="0")
 
-        # ── Main frame ──────────────────────────────────────────────────
-        self.main_frame = tk.Frame(self, bg=BG_LIGHT)
-        self.main_frame.pack(fill="both", expand=True)
-        self.main_frame.grid_rowconfigure(1, weight=1)
-        self.main_frame.grid_columnconfigure(1, weight=1)
-        # ────────────────────────────────────────────────────────────────
-
-        self._build_sidebar()
-        self._build_header()
-        self._build_content()
+        self._build_ui()
         self._load_patients()
+
+    # ------------------------------------------------------------------
+    # Top-level layout
+    # ------------------------------------------------------------------
+    def _build_ui(self):
+        outer = tk.Frame(self, bg=BG_LIGHT)
+        outer.pack(fill="both", expand=True, padx=20, pady=20)
+
+        self._build_sidebar(outer)
+
+        main = tk.Frame(outer, bg=BG_LIGHT)
+        main.pack(side="left", fill="both", expand=True, padx=(12, 0))
+
+        # White header
+        header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        header.pack(fill="x", padx=12, pady=(12, 0))
+        tk.Label(header, text="Patient Management", font=FONT_TITLE,
+                 bg=BG_PANEL, fg=TEXT).pack(side="left", padx=14, pady=14)
+        tk.Label(header, text="Signed in as\nAdministrators Name",
+                 bg=BG_PANEL, fg=TEXT, justify="right").pack(side="right", padx=14)
+
+        # White body
+        body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        body.pack(fill="both", expand=True, padx=12, pady=(10, 12))
+        body.grid_rowconfigure(2, weight=1)
+        body.grid_columnconfigure(0, weight=1)
+
+        self._build_filter_bar(body)
+        self._build_table_section(body)
+        self._build_form_section(body)
+        self._build_action_bar(body)
 
     # ------------------------------------------------------------------
     # Sidebar
     # ------------------------------------------------------------------
-    def _build_sidebar(self):
-        sidebar = tk.Frame(self.main_frame, bg=BG_SIDEBAR, width=SIDEBAR_WIDTH, relief="flat")
-        sidebar.grid(row=0, column=0, rowspan=2, sticky="nsw")
-        sidebar.grid_propagate(False)
+    def _build_sidebar(self, parent):
+        sidebar = tk.Frame(parent, bg=BG_SIDEBAR, width=SIDEBAR_WIDTH)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
 
-        logo_frame = tk.Frame(sidebar, bg=BG_SIDEBAR)
-        logo_frame.pack(fill="x", padx=12, pady=(14, 8))
-        tk.Label(logo_frame, text="CareFlow", bg=BG_SIDEBAR,
-                 fg=TEXT, font=FONT_LOGO).pack(anchor="w")
+        logo_box = tk.Frame(sidebar, bg=BG_SIDEBAR_LIGHT, bd=1, relief="solid")
+        logo_box.pack(fill="x", padx=10, pady=(12, 10))
+        tk.Label(logo_box, text="CareFlow\nAdmin Portal", bg=BG_SIDEBAR_LIGHT, fg=TEXT,
+                 font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8).pack(anchor="w")
 
-        nav_items = [
-            ("Dashboard", lambda: on_nav("Dashboard")),
-            ("Patient",   lambda: on_nav("Patient")),
-            ("Staff",     lambda: on_nav("Staff")),
-            ("Clinic",    lambda: on_nav("Clinic")),
-            ("Records",   lambda: on_nav("Records")),
-            ("Billing",   lambda: on_nav("Billing")),
-        ]
-
-        for label, cmd in nav_items:
-            is_active = label == "Patient"
+        nav_map = {
+            "Dashboard": "HomePage",
+            "Patient":   None,
+            "Staff":     "StaffManagementPage",
+            "Clinic":    "LocationMenuPage",
+            "Records":   "MedicalRecordsPage",
+            "Billing":   "BillingMenuPage",
+        }
+        for item, page in nav_map.items():
+            is_active = item == "Patient"
             bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
-            tk.Button(
-                sidebar, text=label, anchor="w", command=cmd,
-                relief="flat", bg=bg, fg=TEXT,
-                font=FONT_NAV, padx=14, pady=6,
-                activebackground=ACCENT, activeforeground="white",
-            ).pack(fill="x", pady=2, padx=8)
 
-    # ------------------------------------------------------------------
-    # Header
-    # ------------------------------------------------------------------
-    def _build_header(self):
-        header = tk.Frame(self.main_frame, bg=BG_PANEL, height=90, relief="flat")
-        header.grid(row=0, column=1, sticky="new", padx=(12, 12), pady=(12, 0))
-        header.grid_columnconfigure(0, weight=1)
-        header.grid_propagate(False)
+            def make_cmd(p=page):
+                if p and self.controller:
+                    return lambda: self.controller.show_frame(p)
+                return None
 
-        left = tk.Frame(header, bg=BG_PANEL)
-        left.grid(row=0, column=0, sticky="w", padx=14, pady=14)
-        tk.Label(left, text="Patient Management", bg=BG_PANEL,
-                 fg=TEXT, font=FONT_TITLE).pack(anchor="w")
+            cmd = make_cmd()
+            if cmd:
+                tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
+                          anchor="w", padx=10, pady=6, relief="flat",
+                          activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
+                          command=cmd).pack(fill="x", padx=10, pady=2)
+            else:
+                tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
+                         anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
 
-        right = tk.Frame(header, bg=BG_PANEL)
-        right.grid(row=0, column=1, sticky="e", padx=14, pady=14)
-        tk.Label(right, text="Signed in as\nAdministrators Name",
-                 bg=BG_PANEL, fg=TEXT, justify="right").pack(anchor="e")
-        tk.Button(right, text="♡", bg=BG_SIDEBAR, fg=TEXT, width=3,
-                  relief="flat", command=lambda: on_nav("Profile")).pack(anchor="e", pady=(4, 0))
-
-    # ------------------------------------------------------------------
-    # Main content area
-    # ------------------------------------------------------------------
-    def _build_content(self):
-        outer = tk.Frame(self.main_frame, bg=BG_LIGHT)
-        outer.grid(row=1, column=1, sticky="nsew", padx=(12, 12), pady=(8, 12))
-        outer.grid_rowconfigure(2, weight=1)
-        outer.grid_columnconfigure(0, weight=1)
-
-        self._build_filter_bar(outer)
-        self._build_table_panel(outer)
-        self._build_form_panel(outer)
-        self._build_action_bar(outer)
+        tk.Label(sidebar, text="Signed in as:\nAdmin", bg=BG_SIDEBAR, fg=TEXT,
+                 font=("Helvetica", 9), justify="left"
+                 ).pack(side="bottom", anchor="w", padx=10, pady=12)
 
     # ------------------------------------------------------------------
     # Filter / summary bar
     # ------------------------------------------------------------------
     def _build_filter_bar(self, parent):
         filter_bar = tk.Frame(parent, bg=BG_PANEL)
-        filter_bar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=0, pady=(0, 6))
+        filter_bar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 4))
         filter_bar.grid_columnconfigure(1, weight=1)
 
-        # --- Summary cards ---
+        # Summary cards
         card_frame = tk.Frame(filter_bar, bg=BG_PANEL)
-        card_frame.grid(row=0, column=0, sticky="w", padx=(0, 12))
+        card_frame.grid(row=0, column=0, sticky="w")
 
         card_defs = [
             ("Total Patients",    self._total_var),
@@ -197,38 +190,39 @@ class CareFlowPatients(tk.Tk):
             tk.Label(c, text=lbl, bg=CARD_BG, fg=TEXT,
                      font=FONT_SMALL).pack(anchor="nw", padx=10)
 
-        # --- Search + toggle ---
-        right_bar = tk.Frame(filter_bar, bg=BG_PANEL)
-        right_bar.grid(row=0, column=1, sticky="e")
+        # Search + toggle
+        search_frame = tk.Frame(filter_bar, bg=BG_PANEL)
+        search_frame.grid(row=0, column=1, sticky="e", padx=(12, 0))
 
-        tk.Label(right_bar, text="Search:", bg=BG_PANEL, fg=TEXT,
+        tk.Label(search_frame, text="Search:", bg=BG_PANEL, fg=TEXT,
                  font=("Helvetica", 10, "bold")).pack(side="left", padx=(0, 6))
         self.search_var = tk.StringVar()
-        tk.Entry(right_bar, textvariable=self.search_var, width=28,
+        self.search_var.trace_add("write", lambda *_: self._load_patients())
+        tk.Entry(search_frame, textvariable=self.search_var, width=28,
                  font=FONT_SMALL, bg=CARD_BG, fg=TEXT, relief="flat",
                  highlightthickness=1, highlightbackground="#cde8dc",
                  highlightcolor=ACCENT).pack(side="left")
-        self.search_var.trace_add("write", lambda *_: self._load_patients())
 
         self.show_inactive_var = tk.BooleanVar(value=True)
         tk.Checkbutton(
-            right_bar, text="Show inactive", variable=self.show_inactive_var,
+            search_frame, text="Show inactive", variable=self.show_inactive_var,
             bg=BG_PANEL, fg=TEXT, activebackground=BG_PANEL,
             selectcolor=CARD_BG, command=self._load_patients
         ).pack(side="left", padx=(10, 0))
 
         # Divider
         tk.Frame(parent, bg="#e0e0e0", height=1).grid(
-            row=1, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+            row=1, column=0, columnspan=2, sticky="ew", padx=10)
 
     # ------------------------------------------------------------------
-    # Table panel
+    # Table section
     # ------------------------------------------------------------------
-    def _build_table_panel(self, parent):
+    def _build_table_section(self, parent):
         container = tk.Frame(parent, bg=BG_PANEL, bd=1, relief="solid")
-        container.grid(row=2, column=0, sticky="nsew", pady=(0, 8))
+        container.grid(row=2, column=0, sticky="nsew", padx=(10, 6), pady=8)
         container.grid_rowconfigure(1, weight=1)
         container.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(2, weight=1)
 
         tk.Label(container, text="Patients", bg=BG_PANEL,
                  fg=TEXT, font=FONT_HEADER).grid(
@@ -247,7 +241,7 @@ class CareFlowPatients(tk.Tk):
                   foreground=[("selected", TEXT)])
 
         tree_frame = tk.Frame(container, bg=BG_PANEL)
-        tree_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=8)
+        tree_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 8))
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
 
@@ -276,16 +270,16 @@ class CareFlowPatients(tk.Tk):
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
     # ------------------------------------------------------------------
-    # Form panel
+    # Form section
     # ------------------------------------------------------------------
-    def _build_form_panel(self, parent):
+    def _build_form_section(self, parent):
         panel = tk.Frame(parent, bg=BG_PANEL, bd=1, relief="solid", padx=16, pady=14)
-        panel.grid(row=2, column=1, sticky="nsew", padx=(10, 0), pady=(0, 8))
-        parent.grid_columnconfigure(1, minsize=280)
+        panel.grid(row=2, column=1, sticky="nsew", padx=(0, 10), pady=8)
+        parent.grid_columnconfigure(1, minsize=290)
 
         tk.Label(panel, text="Patient Details", bg=BG_PANEL,
                  fg=TEXT, font=FONT_HEADER).grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=(0, 12))
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         self.entries: dict = {}
         fields = [
@@ -321,7 +315,7 @@ class CareFlowPatients(tk.Tk):
     # ------------------------------------------------------------------
     def _build_action_bar(self, parent):
         bar = tk.Frame(parent, bg=BG_LIGHT)
-        bar.grid(row=3, column=0, columnspan=2, sticky="ew")
+        bar.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 4))
 
         btn_cfg = dict(
             relief="flat", fg="white", padx=16, pady=8,
@@ -496,8 +490,13 @@ class CareFlowPatients(tk.Tk):
 
 
 # ==============================
-# Main
+# Standalone entry point
 # ==============================
 if __name__ == "__main__":
-    app = CareFlowPatients()
-    app.mainloop()
+    root = tk.Tk()
+    root.title("CareFlow Admin Portal – Patients")
+    root.geometry("1200x720")
+    root.configure(bg=BG_LIGHT)
+    frame = PatientManagementFrame(root)
+    frame.pack(fill="both", expand=True)
+    root.mainloop()
