@@ -381,6 +381,11 @@ class BillingFrame(tk.Frame):
             font=FONT_BTN, relief="flat", command=self.add_payment_method_dialog
         ).pack(side="left", padx=4)
 
+        tk.Button(
+            controls, text="Remove Payment Method", bg="#d9534f", fg="white",
+            font=FONT_BTN, relief="flat", command=self.remove_payment_method
+        ).pack(side="left", padx=4)
+
     def logout(self):
         self.logged_in_patient_id = None
         self.logged_in_patient_name = ""
@@ -587,6 +592,46 @@ class BillingFrame(tk.Frame):
             relief="flat",
             command=save_payment_method
         ).grid(row=6, column=0, columnspan=2, pady=16)
+
+    def remove_payment_method(self):
+        pm_label = self.pm_var.get().strip()
+        if not pm_label or pm_label not in self.payment_method_map:
+            messagebox.showwarning("No selection", "Please select a payment method to remove.")
+            return
+
+        payment_method_id = self.payment_method_map[pm_label]
+
+        # Check if this payment method is used by any bills
+        row = self._db().cursor().execute("""
+            SELECT COUNT(*) FROM Bill
+            WHERE payment_method_id = ? AND patient_id = ?
+        """, (payment_method_id, self.logged_in_patient_id)).fetchone()
+        used_count = row[0] if row else 0
+
+        warning = ""
+        if used_count > 0:
+            warning = f"\n\nNote: This method was used to pay {used_count} bill(s). Those records will be kept."
+
+        confirmed = messagebox.askyesno(
+            "Confirm Removal",
+            f"Are you sure you want to remove this payment method?\n\n{pm_label}{warning}"
+        )
+        if not confirmed:
+            return
+
+        try:
+            self._reconnect_db()
+            self._db().execute("""
+                DELETE FROM PaymentMethod
+                WHERE payment_method_id = ? AND patient_id = ?
+            """, (payment_method_id, self.logged_in_patient_id))
+            self._db().commit()
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Could not remove payment method.\n\n{e}")
+            return
+
+        self.refresh()
+        messagebox.showinfo("Removed", "Payment method removed successfully.")
 
     def pay_selected(self):
         sel = self.tree.selection()
