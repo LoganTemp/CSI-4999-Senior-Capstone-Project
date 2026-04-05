@@ -12,6 +12,7 @@ Form panel is now inline on the right side (mirrors StaffManagementFrame layout)
 import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
+from PIL import Image, ImageTk
 
 # ── DB ──────────────────────────────────────────────────────────────
 DB_NAME = "healthcare.db"
@@ -426,6 +427,21 @@ class ClinicFrame(tk.Frame, _ClinicBase):
     def _build_ui(self):
         outer = tk.Frame(self, bg=BG_LIGHT)
         outer.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Load icons (keep references to avoid garbage collection)
+        def load_icon(path, size=(18, 20)):
+            img = Image.open(path)
+            img = img.resize(size, Image.LANCZOS)
+            return ImageTk.PhotoImage(img)
+        
+        self.icons = {
+            "Dashboard": load_icon("icons/dashboard_icon.png"),
+            "Patient": load_icon("icons/patient_icon.png"),
+            "Staff": load_icon("icons/staff_icon.png"),
+            "Clinic": load_icon("icons/clinic_icon.png"),
+            "Records": load_icon("icons/folder_icon.png"),
+            "Billing": load_icon("icons/credit_icon.png"),
+        }
 
         # ── Sidebar ────────────────────────────────────────────────
         sidebar = tk.Frame(outer, bg=BG_SIDEBAR, width=170)
@@ -451,6 +467,7 @@ class ClinicFrame(tk.Frame, _ClinicBase):
         for item, page in nav_map.items():
             is_active = item == "Clinic"
             bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
+            icon = self.icons.get(item)
 
             def make_cmd(p=page):
                 if p and self.controller:
@@ -459,12 +476,14 @@ class ClinicFrame(tk.Frame, _ClinicBase):
 
             cmd = make_cmd()
             if cmd:
-                tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                tk.Button(sidebar, text=item, image=icon, compound="left",
+                          bg=bg, fg=TEXT, font=FONT_BODY,
                           anchor="w", padx=10, pady=6, relief="flat",
                           activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
                           command=cmd).pack(fill="x", padx=10, pady=2)
             else:
-                tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                tk.Label(sidebar, text=item, image=icon, compound="left",
+                         bg=bg, fg=TEXT, font=FONT_BODY,
                          anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
 
         if self.controller:
