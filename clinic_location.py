@@ -9,10 +9,10 @@ No menu pages, no patient/staff code — clinic CRUD only.
 Form panel is now inline on the right side (mirrors StaffManagementFrame layout).
 """
 
-import re
 import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
+from PIL import Image, ImageTk
 
 # ── DB ──────────────────────────────────────────────────────────────
 DB_NAME = "healthcare.db"
@@ -39,11 +39,6 @@ BTN_RED    = "#c0392b"
 BTN_GRAY   = "#95a5a6"
 BTN_BLUE   = "#2980b9"
 BTN_SIDEBAR = BG_SIDEBAR
-
-# ── Validation helpers ───────────────────────────────────────────────
-def is_valid_phone(s: str) -> bool:
-    """Phone must be ###-#### (e.g. 555-1234), matching staff pattern."""
-    return bool(re.match(r"^\d{3}-\d{4}$", s))
 
 
 # ── DB helpers ───────────────────────────────────────────────────────
@@ -136,9 +131,6 @@ class _ClinicBase:
     Subclasses must call _build_clinic_ui() and set self.status_var / self._count_var.
     """
 
-    # Keys that are mandatory — phone is required but validated separately for format
-    _REQUIRED_KEYS = ("name", "address", "city", "state", "zip")
-
     def _build_clinic_ui(self, parent):
         """
         Build the split content (table left, form right) + action bar
@@ -224,12 +216,12 @@ class _ClinicBase:
 
         self.entries = {}
         fields = [
-            ("Name *",              "name"),
-            ("Address *",           "address"),
-            ("City *",              "city"),
-            ("State *",             "state"),
-            ("ZIP *",               "zip"),
-            ("Phone (###-####) *",  "phone"),
+            ("Name *",    "name"),
+            ("Address *", "address"),
+            ("City *",    "city"),
+            ("State *",   "state"),
+            ("ZIP *",     "zip"),
+            ("Phone",     "phone"),
         ]
 
         for i, (label, key) in enumerate(fields, start=1):
@@ -243,7 +235,7 @@ class _ClinicBase:
             e.grid(row=i, column=1, pady=3, padx=(8, 0), sticky="ew")
             self.entries[key] = e
 
-        tk.Label(panel, text="★ = required fields",
+        tk.Label(panel, text="* Required fields",
                  bg=BG_PANEL, fg="gray", font=("Helvetica", 8)
                  ).grid(row=len(fields) + 1, column=0, columnspan=2,
                         sticky="w", pady=(8, 0))
@@ -269,9 +261,6 @@ class _ClinicBase:
                   command=self.refresh_table,              **btn_cfg).pack(side="left", padx=(0, 6))
         tk.Button(bar, text="Clear",       bg=BTN_GRAY,   activebackground="#5d6d7e",
                   command=self._clear_form,                **btn_cfg).pack(side="left")
-
-        tk.Label(bar, text="★ = required fields",
-                 bg=BG_PANEL, fg="#5a8a76", font=("Helvetica", 9)).pack(side="right")
 
     # ── Summary card ─────────────────────────────────────────────────
     def _make_card(self, parent, label, str_var):
@@ -306,8 +295,6 @@ class _ClinicBase:
         for key, val in zip(keys, row):
             self.entries[key].delete(0, tk.END)
             self.entries[key].insert(0, val or "")
-        # Clear any leftover validation highlights when loading a record
-        self._reset_required_highlights()
         self.status_var.set(f"Selected clinic ID {cid}.")
 
     # ── Form helpers ─────────────────────────────────────────────────
@@ -318,50 +305,18 @@ class _ClinicBase:
         for e in self.entries.values():
             e.delete(0, tk.END)
         self._selected_id = None
-        self._reset_required_highlights()
         if self.tree.selection():
             self.tree.selection_remove(self.tree.selection())
         self.status_var.set("Form cleared.")
 
-    # ── Validation — mirrors StaffManagementFrame._validate_base ─────
-    def _validate(self, data: dict) -> bool:
-        """
-        Highlight empty required fields in red and return False if any are
-        missing, then also check phone format — same pattern as staff.
-        """
-        missing = []
-        all_required = self._REQUIRED_KEYS + ("phone",)
-        for key in all_required:
-            entry = self.entries[key]
-            if data.get(key):
-                entry.config(highlightbackground="#cde8dc", highlightcolor=ACCENT)
-            else:
-                entry.config(highlightbackground="#e74c3c", highlightcolor="#e74c3c")
-                missing.append(key.upper() if key == "zip" else key.replace("_", " ").title())
-
-        if missing:
-            messagebox.showerror(
-                "Missing Required Fields",
-                "Please fill in: " + ", ".join(missing)
-            )
+    def _validate(self, data):
+        required = [k for k in ("name", "address", "city", "state", "zip")
+                    if not data.get(k)]
+        if required:
+            messagebox.showwarning("Missing Fields",
+                                   "Name, Address, City, State, and ZIP are required.")
             return False
-
-        # Phone format check — must be ###-#### (e.g. 555-1234)
-        if not is_valid_phone(data["phone"]):
-            self.entries["phone"].config(
-                highlightbackground="#e74c3c", highlightcolor="#e74c3c"
-            )
-            messagebox.showerror("Invalid Phone", "Phone must be ###-#### (e.g. 555-1234).")
-            return False
-
         return True
-
-    def _reset_required_highlights(self):
-        """Remove any red borders left from a previous failed validation."""
-        for key in self._REQUIRED_KEYS + ("phone",):
-            self.entries[key].config(
-                highlightbackground="#cde8dc", highlightcolor=ACCENT
-            )
 
     # ── CRUD ─────────────────────────────────────────────────────────
     def _do_add(self):
@@ -472,6 +427,21 @@ class ClinicFrame(tk.Frame, _ClinicBase):
     def _build_ui(self):
         outer = tk.Frame(self, bg=BG_LIGHT)
         outer.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Load icons (keep references to avoid garbage collection)
+        def load_icon(path, size=(18, 20)):
+            img = Image.open(path)
+            img = img.resize(size, Image.LANCZOS)
+            return ImageTk.PhotoImage(img)
+        
+        self.icons = {
+            "Dashboard": load_icon("icons/dashboard_icon.png"),
+            "Patient": load_icon("icons/patient_icon.png"),
+            "Staff": load_icon("icons/staff_icon.png"),
+            "Clinic": load_icon("icons/clinic_icon.png"),
+            "Records": load_icon("icons/folder_icon.png"),
+            "Billing": load_icon("icons/credit_icon.png"),
+        }
 
         # ── Sidebar ────────────────────────────────────────────────
         sidebar = tk.Frame(outer, bg=BG_SIDEBAR, width=170)
@@ -497,6 +467,7 @@ class ClinicFrame(tk.Frame, _ClinicBase):
         for item, page in nav_map.items():
             is_active = item == "Clinic"
             bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
+            icon = self.icons.get(item)
 
             def make_cmd(p=page):
                 if p and self.controller:
@@ -505,12 +476,14 @@ class ClinicFrame(tk.Frame, _ClinicBase):
 
             cmd = make_cmd()
             if cmd:
-                tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                tk.Button(sidebar, text=item, image=icon, compound="left",
+                          bg=bg, fg=TEXT, font=FONT_BODY,
                           anchor="w", padx=10, pady=6, relief="flat",
                           activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
                           command=cmd).pack(fill="x", padx=10, pady=2)
             else:
-                tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
+                tk.Label(sidebar, text=item, image=icon, compound="left",
+                         bg=bg, fg=TEXT, font=FONT_BODY,
                          anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
 
         if self.controller:
