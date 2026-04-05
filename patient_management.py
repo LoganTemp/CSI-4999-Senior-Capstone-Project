@@ -37,6 +37,11 @@ FONT_SMALL    = ("Helvetica", 10)
 
 DB_NAME = "healthcare.db"
 
+
+def is_valid_phone(s: str) -> bool:
+    import re
+    return bool(re.match(r"^\d{3}-\d{4}$", s))
+
 # ==============================
 # DB helpers
 # ==============================
@@ -301,16 +306,18 @@ class PatientManagementFrame(tk.Frame):
             row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         self.entries: dict = {}
+
+        # Required fields are marked with * — keys listed in _REQUIRED_KEYS
         fields = [
             ("First Name *",       "first_name"),
             ("Last Name *",        "last_name"),
-            ("Date of Birth",      "dob"),
+            ("Date of Birth *",     "dob"),
             ("Sex",                "sex"),
-            ("Phone",              "phone"),
-            ("Email",              "email"),
+            ("Phone (###-####) *",  "phone"),
+            ("Email *",            "email"),
             ("Address",            "address"),
             ("Allergies",          "allergies"),
-            ("Conditions",         "conditions"),
+            ("Conditions *",       "conditions"),
             ("Medications",        "medications"),
             ("Notes",              "notes"),
             ("Emergency Contact",  "emergency_contact"),
@@ -329,13 +336,24 @@ class PatientManagementFrame(tk.Frame):
 
         panel.grid_columnconfigure(1, weight=1)
 
+        # Active checkbox — matches StaffManagementFrame pattern exactly
+        row_after_fields = len(fields) + 1
+        tk.Label(panel, text="Active", bg=BG_PANEL, fg=TEXT,
+                 font=("Helvetica", 9)).grid(
+            row=row_after_fields, column=0, sticky="w", pady=3)
+        self.active_var = tk.IntVar(value=1)
+        tk.Checkbutton(panel, variable=self.active_var,
+                       bg=BG_PANEL, activebackground=BG_PANEL,
+                       selectcolor=CARD_BG).grid(
+            row=row_after_fields, column=1, sticky="w", padx=(8, 0))
+
         # Clinic assignment listbox
-        row_idx = len(fields) + 1
+        loc_row = row_after_fields + 1
         tk.Label(panel, text="Clinic Assignment", bg=BG_PANEL, fg=TEXT,
                  font=("Helvetica", 9)).grid(
-            row=row_idx, column=0, sticky="nw", pady=3)
+            row=loc_row, column=0, sticky="nw", pady=3)
         loc_frame = tk.Frame(panel, bg=BG_PANEL)
-        loc_frame.grid(row=row_idx, column=1, pady=3, padx=(8, 0), sticky="ew")
+        loc_frame.grid(row=loc_row, column=1, pady=3, padx=(8, 0), sticky="ew")
         self.loc_listbox = tk.Listbox(
             loc_frame, selectmode="single", height=4,
             exportselection=False, font=("Helvetica", 9),
@@ -351,7 +369,7 @@ class PatientManagementFrame(tk.Frame):
         loc_sb.pack(side="left", fill="y")
         tk.Label(panel, text="Select a clinic to assign this patient",
                  bg=BG_PANEL, fg="gray", font=("Helvetica", 8)).grid(
-            row=row_idx + 1, column=1, sticky="w", padx=(8, 0))
+            row=loc_row + 1, column=1, sticky="w", padx=(8, 0))
 
     # ------------------------------------------------------------------
     # Action bar
@@ -380,6 +398,53 @@ class PatientManagementFrame(tk.Frame):
         tk.Label(bar,
                  text="★ = required fields   |   Inactive patients are shown in grey.",
                  bg=BG_LIGHT, fg="#5a8a76", font=("Helvetica", 9)).pack(side="right")
+
+    # ------------------------------------------------------------------
+    # Validation — mirrors StaffManagementFrame._validate_base
+    # ------------------------------------------------------------------
+
+    # Keys that must be non-empty before saving
+    _REQUIRED_KEYS = ("first_name", "last_name", "dob", "phone", "email", "conditions")
+
+    def _validate(self, data: dict) -> bool:
+        """
+        Highlight empty required fields in red (like staff) and return False
+        if any are missing.  Resets border to normal on fields that are filled.
+        """
+        missing = []
+        for key in self._REQUIRED_KEYS:
+            entry = self.entries[key]
+            if data.get(key):
+                # restore normal border
+                entry.config(highlightbackground="#cde8dc", highlightcolor=ACCENT)
+            else:
+                # red border to signal the problem
+                entry.config(highlightbackground="#e74c3c", highlightcolor="#e74c3c")
+                missing.append(key.replace("_", " ").title())
+
+        if missing:
+            messagebox.showerror(
+                "Missing Required Fields",
+                "Please fill in: " + ", ".join(missing)
+            )
+            return False
+
+        # Phone format check — must be ###-#### (e.g. 555-1234)
+        if not is_valid_phone(data.get("phone", "")):
+            self.entries["phone"].config(
+                highlightbackground="#e74c3c", highlightcolor="#e74c3c"
+            )
+            messagebox.showerror("Invalid Phone", "Phone must be ###-#### (e.g. 555-1234).")
+            return False
+
+        return True
+
+    def _reset_required_highlights(self):
+        """Remove any red borders left from a previous failed validation."""
+        for key in self._REQUIRED_KEYS:
+            self.entries[key].config(
+                highlightbackground="#cde8dc", highlightcolor=ACCENT
+            )
 
     # ------------------------------------------------------------------
     # Data methods
@@ -451,16 +516,20 @@ class PatientManagementFrame(tk.Frame):
         row = conn.execute("""
             SELECT first_name, last_name, dob, sex, phone, email, address,
                    allergies, conditions, medications, notes, emergency_contact,
-                   location_id
+                   active_flag, location_id
             FROM Patient WHERE patient_id = ?
         """, (self._selected_id,)).fetchone()
         conn.close()
 
         if row:
-            *fields, assigned_loc_id = row
+            # Unpack: first 12 are field values, then active_flag, then location_id
+            *fields, active_flag, assigned_loc_id = row
             for i, key in enumerate(self.entries):
                 self.entries[key].delete(0, tk.END)
                 self.entries[key].insert(0, fields[i] if fields[i] else "")
+
+            # Set active checkbox to match the patient's current active_flag
+            self.active_var.set(1 if active_flag else 0)
 
             self.loc_listbox.selection_clear(0, tk.END)
             if assigned_loc_id is not None:
@@ -470,13 +539,15 @@ class PatientManagementFrame(tk.Frame):
                         self.loc_listbox.see(i)
                         break
 
+            # Clear any leftover validation highlights when loading a record
+            self._reset_required_highlights()
+
     def _collect(self) -> dict:
         return {k: e.get().strip() for k, e in self.entries.items()}
 
     def _add_patient(self):
         data = self._collect()
-        if not data["first_name"] or not data["last_name"]:
-            messagebox.showwarning("Required", "First Name and Last Name are required.")
+        if not self._validate(data):
             return
         sel_locs = self.loc_listbox.curselection()
         loc_id = self.location_list[sel_locs[0]][1] if sel_locs else None
@@ -486,9 +557,9 @@ class PatientManagementFrame(tk.Frame):
                 INSERT INTO Patient (
                     first_name, last_name, dob, sex, phone, email,
                     address, allergies, conditions, medications, notes,
-                    emergency_contact, location_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (*data.values(), loc_id))
+                    emergency_contact, active_flag, location_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (*data.values(), self.active_var.get(), loc_id))
             conn.commit()
             conn.close()
             messagebox.showinfo("Success", "Patient added successfully.")
@@ -502,8 +573,7 @@ class PatientManagementFrame(tk.Frame):
             messagebox.showwarning("Select", "Please select a patient first.")
             return
         data = self._collect()
-        if not data["first_name"] or not data["last_name"]:
-            messagebox.showwarning("Required", "First Name and Last Name are required.")
+        if not self._validate(data):
             return
         sel_locs = self.loc_listbox.curselection()
         loc_id = self.location_list[sel_locs[0]][1] if sel_locs else None
@@ -513,9 +583,9 @@ class PatientManagementFrame(tk.Frame):
                 UPDATE Patient SET
                     first_name=?, last_name=?, dob=?, sex=?, phone=?, email=?,
                     address=?, allergies=?, conditions=?, medications=?,
-                    notes=?, emergency_contact=?, location_id=?
+                    notes=?, emergency_contact=?, active_flag=?, location_id=?
                 WHERE patient_id=?
-            """, (*data.values(), loc_id, self._selected_id))
+            """, (*data.values(), self.active_var.get(), loc_id, self._selected_id))
             conn.commit()
             conn.close()
             messagebox.showinfo("Updated", "Patient updated successfully.")
@@ -562,8 +632,10 @@ class PatientManagementFrame(tk.Frame):
     def _clear_form(self):
         for e in self.entries.values():
             e.delete(0, tk.END)
+        self.active_var.set(1)          # default to Active when clearing
         self.loc_listbox.selection_clear(0, tk.END)
         self._selected_id = None
+        self._reset_required_highlights()
         if self.tree.selection():
             self.tree.selection_remove(self.tree.selection())
 
