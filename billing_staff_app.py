@@ -194,9 +194,18 @@ class BillingFrame(tk.Frame):
         body.pack(fill="both", expand=True, pady=(10, 0))
 
         card = tk.Frame(body, bg=CARD_BG, bd=1, relief="solid")
-        card.place(relx=0.5, rely=0.45, anchor="center", width=420, height=230)
+        card.place(relx=0.5, rely=0.45, anchor="center", width=420, height=270)
 
-        tk.Label(card, text="Login to create and manage bills", bg=CARD_BG, fg=TEXT, font=FONT_HEADER).pack(pady=(18, 14))
+        tk.Label(card, text="Login to create and manage bills", bg=CARD_BG, fg=TEXT, font=FONT_HEADER).pack(pady=(18, 10))
+
+        demo_box = tk.Frame(card, bg="#fffbe6", bd=1, relief="solid")
+        demo_box.pack(fill="x", padx=30, pady=(0, 8))
+        tk.Label(
+            demo_box,
+            text="Demo \u2014 Email: StaffTest@email.com  |  Password: Test1234",
+            bg="#fffbe6", fg="#7a5c00", font=("Helvetica", 8, "italic"),
+            padx=6, pady=4
+        ).pack()
 
         tk.Label(card, text="Email", bg=CARD_BG, fg=TEXT, font=FONT_BODY).pack(anchor="w", padx=30)
         self.email_var = tk.StringVar()
