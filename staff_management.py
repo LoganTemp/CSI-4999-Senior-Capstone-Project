@@ -86,6 +86,13 @@ class StaffManagementFrame(tk.Frame):
         header.pack(fill="x", padx=12, pady=(12, 0))
         tk.Label(header, text="Staff Management", font=FONT_TITLE,
                  bg=BG_PANEL, fg=TEXT).pack(side="left", padx=14, pady=14)
+        try:
+            from PIL import Image, ImageTk
+            _simg = Image.open("img/staff_icon.png").resize((45, 45), Image.LANCZOS)
+            self._staff_icon = ImageTk.PhotoImage(_simg)
+            tk.Label(header, image=self._staff_icon, bg=BG_PANEL).pack(side="right", padx=(0, 14), pady=6)
+        except Exception:
+            pass
         signed_in = "Staff" if self.role == "Staff" else "Administrator"
         tk.Label(header, text=f"Signed in as: {signed_in}",
                  bg=BG_PANEL, fg=TEXT, font=("Helvetica", 10)).pack(side="right", padx=14)
@@ -93,7 +100,7 @@ class StaffManagementFrame(tk.Frame):
         # -- White body: summary cards + split content --
         body = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
         body.pack(fill="both", expand=True, padx=12, pady=(10, 12))
-        body.grid_rowconfigure(1, weight=1)
+        body.grid_rowconfigure(2, weight=1)
         body.grid_columnconfigure(0, weight=1)
 
         self._build_filter_bar(body)
