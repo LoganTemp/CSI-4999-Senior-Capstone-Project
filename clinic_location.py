@@ -290,6 +290,7 @@ class _ClinicBase:
         self._selected_id = cid
         row = get_clinic_full(cid)
         if not row:
+            messagebox.showerror("Error", f"Could not load details for clinic ID {cid}.")
             return
         keys = ("name", "address", "city", "state", "zip", "phone")
         for key, val in zip(keys, row):
@@ -331,6 +332,8 @@ class _ClinicBase:
             self.refresh_table()
             self.status_var.set(f"Added clinic '{data['name']}'.")
             self._clear_form()
+            messagebox.showinfo("Clinic Added",
+                                f"'{data['name']}' has been added successfully.")
 
     def _do_update(self):
         if not self._selected_id:
@@ -348,6 +351,8 @@ class _ClinicBase:
             self.refresh_table()
             self.status_var.set(f"Updated clinic '{data['name']}'.")
             self._clear_form()
+            messagebox.showinfo("Clinic Updated",
+                                f"'{data['name']}' has been updated successfully.")
 
     def _do_delete(self):
         if not self._selected_id:
@@ -363,6 +368,8 @@ class _ClinicBase:
             self.refresh_table()
             self.status_var.set(f"Deleted clinic '{name}'.")
             self._clear_form()
+            messagebox.showinfo("Clinic Deleted",
+                                f"'{name}' has been marked as inactive.")
 
 
 # ── Standalone window ────────────────────────────────────────────────
