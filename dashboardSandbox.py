@@ -252,13 +252,35 @@ class DashboardFrame(tk.Frame):
                  font=("Helvetica", 9, "bold"), justify="left",
                  padx=8, pady=8).pack(anchor="w")
 
+        def load_icon(path, size=(18, 20)):
+            try:
+                from PIL import Image, ImageTk
+                img = Image.open(path).resize(size, Image.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+                return photo
+            except Exception:
+                return None
+
+        if not hasattr(self, "_sidebar_icons"):
+            self._sidebar_icons = {
+                "Dashboard": load_icon("icons/dashboard_icon.png"),
+                "Patient":   load_icon("icons/patient_icon.png"),
+                "Staff":     load_icon("icons/staff_icon.png"),
+                "Clinic":    load_icon("icons/clinic_icon.png"),
+                "Records":   load_icon("icons/folder_icon.png"),
+                "Billing":   load_icon("icons/credit_icon.png"),
+            }
+
         for item in nav_items:
             bg = self._SB_LIGHT if item == "Dashboard" else self._SB
+            icon = self._sidebar_icons.get(item)
+            kw = dict(image=icon, compound="left") if icon else {}
             tk.Button(sidebar, text=item, bg=bg, fg=TEXT,
                       font=("Helvetica", 10), anchor="w", padx=10, pady=6,
                       relief="flat", activebackground=self._SB_LIGHT,
                       cursor="hand2",
-                      command=lambda l=item: (self.nav_cmd(l) if self.nav_cmd else on_nav(l))).pack(fill="x", padx=10, pady=2)
+                      command=lambda l=item: (self.nav_cmd(l) if self.nav_cmd else on_nav(l)),
+                      **kw).pack(fill="x", padx=10, pady=2)
 
         if self.back_cmd:
             tk.Button(sidebar, text="← Back", bg=self._SB, fg=TEXT,

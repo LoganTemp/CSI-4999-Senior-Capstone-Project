@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+from PIL import Image, ImageTk
 from dashboardSandbox    import DashboardFrame
 from staff_management    import StaffManagementFrame
 from clinic_location     import ClinicFrame
@@ -90,9 +91,26 @@ class BillingLandingFrame(tk.Frame):
                 "Records":   "RecordsMenuPage",
                 "Billing":   None,
             }
+        def load_icon(path, size=(18, 20)):
+            try:
+                img = Image.open(path).resize(size, Image.LANCZOS)
+                return ImageTk.PhotoImage(img)
+            except Exception:
+                return None
+
+        self._billing_icons = {
+            "Dashboard": load_icon("icons/dashboard_icon.png"),
+            "Patient":   load_icon("icons/patient_icon.png"),
+            "Staff":     load_icon("icons/staff_icon.png"),
+            "Clinic":    load_icon("icons/clinic_icon.png"),
+            "Records":   load_icon("icons/folder_icon.png"),
+            "Billing":   load_icon("icons/credit_icon.png"),
+        }
+
         for item, page in nav_map.items():
             is_active = item == "Billing"
             bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
+            icon = self._billing_icons.get(item)
 
             def make_cmd(p=page):
                 if p and self.controller:
@@ -100,14 +118,15 @@ class BillingLandingFrame(tk.Frame):
                 return None
 
             cmd = make_cmd()
+            kw = dict(image=icon, compound="left") if icon else {}
             if cmd:
                 tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
                           anchor="w", padx=10, pady=6, relief="flat",
                           activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
-                          command=cmd).pack(fill="x", padx=10, pady=2)
+                          command=cmd, **kw).pack(fill="x", padx=10, pady=2)
             else:
                 tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_SMALL,
-                         anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
+                         anchor="w", padx=10, pady=6, **kw).pack(fill="x", padx=10, pady=2)
 
         if self.controller:
             tk.Button(sidebar, text="← Dashboard", bg=BG_SIDEBAR, fg=TEXT,
@@ -228,12 +247,32 @@ class MainApp(tk.Tk):
         def _role_required():
             messagebox.showinfo("Role Required", "You must select your role first.")
 
+        def load_icon(path, size=(18, 20)):
+            try:
+                img = Image.open(path).resize(size, Image.LANCZOS)
+                return ImageTk.PhotoImage(img)
+            except Exception:
+                return None
+
+        icon_map = {
+            "Dashboard": load_icon("icons/dashboard_icon.png"),
+            "Patient":   load_icon("icons/patient_icon.png"),
+            "Staff":     load_icon("icons/staff_icon.png"),
+            "Clinic":    load_icon("icons/clinic_icon.png"),
+            "Records":   load_icon("icons/folder_icon.png"),
+            "Billing":   load_icon("icons/credit_icon.png"),
+        }
+        # Keep references so they aren't garbage collected
+        self._home_icons = icon_map
+
         for item in ["Dashboard", "Patient", "Staff", "Clinic", "Records", "Billing"]:
+            icon = icon_map.get(item)
+            kw = dict(image=icon, compound="left") if icon else {}
             tk.Button(sidebar, text=item, bg=BG_SIDEBAR, fg=TEXT,
                       font=FONT_SMALL, anchor="w", padx=10, pady=6,
                       relief="flat", activebackground=BG_SIDEBAR_LIGHT,
                       cursor="hand2",
-                      command=_role_required).pack(fill="x", padx=10, pady=2)
+                      command=_role_required, **kw).pack(fill="x", padx=10, pady=2)
 
     # ── Main content area ─────────────────────────────────────────────────────
     def _build_main(self, parent):
