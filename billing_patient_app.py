@@ -82,6 +82,10 @@ class BillingFrame(tk.Frame):
         self.logged_in_patient_name = ""
         self.payment_method_map = {}
 
+        # Patient picker state (mirrors staff billing pattern)
+        self.patient_map = {}
+        self.selected_patient_id = None
+
         self.login_frame = None
         self.app_frame = None
         self.tree = None
@@ -108,20 +112,6 @@ class BillingFrame(tk.Frame):
         if self.app_frame:
             self.app_frame.destroy()
             self.app_frame = None
-
-    def _sidebar_button(self, parent, text, active=False):
-        bg = BG_SIDEBAR_LIGHT if active else BG_SIDEBAR
-        fg = TEXT
-        return tk.Label(
-            parent,
-            text=text,
-            bg=bg,
-            fg=fg,
-            font=FONT_BODY,
-            anchor="w",
-            padx=10,
-            pady=6
-        )
 
     def _build_sidebar(self, parent, active_label="Billing"):
         sidebar = tk.Frame(parent, bg=BG_SIDEBAR, width=170)
@@ -170,6 +160,10 @@ class BillingFrame(tk.Frame):
                       ).pack(side="bottom", fill="x", padx=10, pady=(0, 12))
 
         return sidebar
+
+    # -------------------------------------------------------------------------
+    # LOGIN UI
+    # -------------------------------------------------------------------------
 
     def _build_login_ui(self):
         self._clear_root_frames()
@@ -252,7 +246,13 @@ class BillingFrame(tk.Frame):
         self.patient_name_var.set(f"Signed in as: {self.logged_in_patient_name} (ID {patient_id})")
 
         self._build_app_ui()
+        self._load_patients()          # populate patient picker
+        self._select_patient_by_id(patient_id)  # default to own record
         self.refresh()
+
+    # -------------------------------------------------------------------------
+    # MAIN APP UI
+    # -------------------------------------------------------------------------
 
     def _build_app_ui(self):
         self._clear_root_frames()
@@ -268,27 +268,48 @@ class BillingFrame(tk.Frame):
         main = tk.Frame(outer, bg=BG_LIGHT)
         main.pack(side="left", fill="both", expand=True, padx=(12, 0))
 
+        # --- Header ---
         header = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
         header.pack(fill="x")
 
         left_header = tk.Frame(header, bg=BG_PANEL)
         left_header.pack(side="left", padx=14, pady=12)
         tk.Label(left_header, text="Patient Billing", bg=BG_PANEL, fg=TEXT, font=FONT_TITLE).pack(anchor="w")
-        tk.Label(left_header, text=self.patient_name_var.get(), bg=BG_PANEL, fg=TEXT, font=FONT_SMALL).pack(anchor="w")
+        tk.Label(left_header, textvariable=self.patient_name_var, bg=BG_PANEL, fg=TEXT, font=FONT_SMALL).pack(anchor="w")
 
         right_header = tk.Frame(header, bg=BG_PANEL)
         right_header.pack(side="right", padx=14, pady=12)
         if self.back_command:
-            tk.Button(right_header, text="Back", bg="#e0e0e0", fg="#222", relief="flat", command=self.back_command).pack(
-                side="left", padx=4
-            )
-        tk.Button(right_header, text="Refresh", bg=BG_SIDEBAR, fg=TEXT, relief="flat", command=self.refresh).pack(
-            side="left", padx=4
-        )
-        tk.Button(right_header, text="Logout", bg=ACCENT, fg="white", relief="flat", command=self.logout).pack(
-            side="left", padx=4
-        )
+            tk.Button(right_header, text="Back", bg="#e0e0e0", fg="#222", relief="flat",
+                      command=self.back_command).pack(side="left", padx=4)
+        tk.Button(right_header, text="Refresh", bg=BG_SIDEBAR, fg=TEXT, relief="flat",
+                  command=self.refresh).pack(side="left", padx=4)
+        tk.Button(right_header, text="Logout", bg=ACCENT, fg="white", relief="flat",
+                  command=self.logout).pack(side="left", padx=4)
 
+        # --- Patient picker bar (mirrors staff billing) ---
+        picker_panel = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
+        picker_panel.pack(fill="x", pady=(10, 0))
+
+        picker_inner = tk.Frame(picker_panel, bg=BG_PANEL)
+        picker_inner.pack(fill="x", padx=12, pady=10)
+
+        tk.Label(picker_inner, text="Viewing patient:", bg=BG_PANEL, fg=TEXT, font=FONT_BODY).pack(side="left")
+
+        self.viewing_patient_var = tk.StringVar()
+        self.patient_picker_combo = ttk.Combobox(
+            picker_inner, textvariable=self.viewing_patient_var,
+            state="readonly", width=55
+        )
+        self.patient_picker_combo.pack(side="left", padx=8)
+        self.patient_picker_combo.bind("<<ComboboxSelected>>", lambda e: self._on_patient_selected())
+
+        tk.Button(
+            picker_inner, text="Load Bills", bg=BG_SIDEBAR, fg=TEXT,
+            font=FONT_BTN, relief="flat", command=self._on_patient_selected
+        ).pack(side="left", padx=4)
+
+        # --- Summary cards ---
         cards_frame = tk.Frame(main, bg=BG_LIGHT)
         cards_frame.pack(fill="x", pady=(10, 10))
 
@@ -310,16 +331,19 @@ class BillingFrame(tk.Frame):
         )
         self.pm_card.pack(side="left")
 
+        # --- Bills table ---
         table_panel = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
         table_panel.pack(fill="both", expand=True)
 
-        tk.Label(table_panel, text="Bills", bg=BG_PANEL, fg=TEXT, font=FONT_HEADER).pack(anchor="w", padx=12, pady=(10, 6))
+        tk.Label(table_panel, text="Bills", bg=BG_PANEL, fg=TEXT, font=FONT_HEADER).pack(
+            anchor="w", padx=12, pady=(10, 6)
+        )
 
         table_wrap = tk.Frame(table_panel, bg=BG_PANEL)
         table_wrap.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
         cols = ("bill_id", "amount", "due_date", "status", "created_at", "paid_date", "location", "receipt_number")
-        self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", height=12)
+        self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", height=10)
 
         headings = {
             "bill_id": "Bill ID",
@@ -348,10 +372,10 @@ class BillingFrame(tk.Frame):
 
         vsb = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
-
         self.tree.pack(side="left", fill="both", expand=True)
         vsb.pack(side="left", fill="y")
 
+        # --- Action panel ---
         action_panel = tk.Frame(main, bg=BG_PANEL, bd=1, relief="solid")
         action_panel.pack(fill="x", pady=(10, 0))
 
@@ -386,20 +410,59 @@ class BillingFrame(tk.Frame):
             font=FONT_BTN, relief="flat", command=self.remove_payment_method
         ).pack(side="left", padx=4)
 
-    def logout(self):
-        self.logged_in_patient_id = None
-        self.logged_in_patient_name = ""
-        self.patient_name_var.set("Not signed in")
-        self._build_login_ui()
+    # -------------------------------------------------------------------------
+    # PATIENT PICKER HELPERS
+    # -------------------------------------------------------------------------
+
+    def _load_patients(self):
+        """Populate the patient picker combobox with all patients."""
+        rows = self._db().cursor().execute("""
+            SELECT patient_id, first_name, last_name, email
+            FROM Patient
+            ORDER BY last_name, first_name
+        """).fetchall()
+
+        self.patient_map.clear()
+        display = []
+        for pid, fn, ln, email in rows:
+            label = f"{ln}, {fn}  (ID {pid})" + (f"  <{email}>" if email else "")
+            self.patient_map[label] = pid
+            display.append(label)
+
+        self.patient_picker_combo["values"] = display
+
+    def _select_patient_by_id(self, patient_id: int):
+        """Set the picker to a specific patient_id and load their data."""
+        for label, pid in self.patient_map.items():
+            if pid == patient_id:
+                self.viewing_patient_var.set(label)
+                self.selected_patient_id = patient_id
+                return
+        # Fallback: just use the logged-in patient
+        self.selected_patient_id = patient_id
+
+    def _on_patient_selected(self):
+        """Called when the user picks a patient from the dropdown."""
+        label = self.viewing_patient_var.get().strip()
+        if label and label in self.patient_map:
+            self.selected_patient_id = self.patient_map[label]
+        else:
+            self.selected_patient_id = self.logged_in_patient_id
+        self.refresh()
+
+    # -------------------------------------------------------------------------
+    # DATA LOADING
+    # -------------------------------------------------------------------------
 
     def _load_payment_methods(self):
+        """Load payment methods for the *currently viewed* patient."""
         self.payment_method_map.clear()
         rows = self._db().cursor().execute("""
             SELECT payment_method_id, type, last4, exp_month, exp_year, active_flag
             FROM PaymentMethod
             WHERE patient_id = ?
             ORDER BY active_flag DESC, payment_method_id DESC
-        """, (self.logged_in_patient_id,)).fetchall()
+        """, (self.selected_patient_id,)).fetchall()
 
         display = []
         for pmid, typ, last4, mm, yy, active in rows:
@@ -415,6 +478,7 @@ class BillingFrame(tk.Frame):
             self.pm_combo.set("No payment methods found")
 
     def _load_bills(self):
+        """Load bills for the *currently viewed* patient."""
         for item in self.tree.get_children():
             self.tree.delete(item)
 
@@ -435,7 +499,7 @@ class BillingFrame(tk.Frame):
                 CASE WHEN b.status = 'paid' THEN 1 ELSE 0 END,
                 b.due_date ASC,
                 b.created_at DESC
-        """, (self.logged_in_patient_id,)).fetchall()
+        """, (self.selected_patient_id,)).fetchall()
 
         bill_count = 0
         unpaid_total = 0.0
@@ -462,8 +526,21 @@ class BillingFrame(tk.Frame):
 
     def refresh(self):
         self._reconnect_db()
+        if self.selected_patient_id is None:
+            self.selected_patient_id = self.logged_in_patient_id
         self._load_payment_methods()
         self._load_bills()
+
+    # -------------------------------------------------------------------------
+    # ACTIONS
+    # -------------------------------------------------------------------------
+
+    def logout(self):
+        self.logged_in_patient_id = None
+        self.logged_in_patient_name = ""
+        self.selected_patient_id = None
+        self.patient_name_var.set("Not signed in")
+        self._build_login_ui()
 
     def add_payment_method_dialog(self):
         if not self.logged_in_patient_id:
@@ -487,11 +564,8 @@ class BillingFrame(tk.Frame):
         tk.Label(panel, text="Payment Type:", bg=BG_PANEL, fg=TEXT).grid(row=1, column=0, padx=12, pady=8, sticky="w")
         type_var = tk.StringVar(value="Visa")
         type_combo = ttk.Combobox(
-            panel,
-            textvariable=type_var,
-            state="readonly",
-            values=["Visa", "MasterCard", "Discover", "Amex", "Debit"],
-            width=25
+            panel, textvariable=type_var, state="readonly",
+            values=["Visa", "MasterCard", "Discover", "Amex", "Debit"], width=25
         )
         type_combo.grid(row=1, column=1, padx=12, pady=8, sticky="w")
 
@@ -515,12 +589,8 @@ class BillingFrame(tk.Frame):
 
         active_var = tk.IntVar(value=1)
         tk.Checkbutton(
-            panel,
-            text="Set as active payment method",
-            variable=active_var,
-            bg=BG_PANEL,
-            fg=TEXT,
-            selectcolor=BG_PANEL
+            panel, text="Set as active payment method", variable=active_var,
+            bg=BG_PANEL, fg=TEXT, selectcolor=BG_PANEL
         ).grid(row=5, column=0, columnspan=2, padx=12, pady=8, sticky="w")
 
         def save_payment_method():
@@ -533,47 +603,30 @@ class BillingFrame(tk.Frame):
             if not pm_type or not card_number or not exp_month or not exp_year:
                 messagebox.showerror("Missing fields", "Please complete all payment method fields.")
                 return
-
             if not card_number.isdigit() or len(card_number) < 4:
                 messagebox.showerror("Invalid card", "Card number must be numeric and at least 4 digits.")
                 return
-
             if not exp_month.isdigit() or not (1 <= int(exp_month) <= 12):
                 messagebox.showerror("Invalid month", "Expiration month must be between 1 and 12.")
                 return
-
             if not exp_year.isdigit() or len(exp_year) != 4:
                 messagebox.showerror("Invalid year", "Expiration year must be 4 digits.")
                 return
 
             last4 = card_number[-4:]
-            exp_month_db = int(exp_month)
-            exp_year_db = int(exp_year)
 
             try:
                 self._reconnect_db()
                 cur = self._db().cursor()
-
                 if active_flag == 1:
-                    cur.execute("""
-                        UPDATE PaymentMethod
-                        SET active_flag = 0
-                        WHERE patient_id = ?
-                    """, (self.logged_in_patient_id,))
-
+                    cur.execute(
+                        "UPDATE PaymentMethod SET active_flag = 0 WHERE patient_id = ?",
+                        (self.selected_patient_id,)
+                    )
                 cur.execute("""
-                    INSERT INTO PaymentMethod (
-                        patient_id, type, last4, exp_month, exp_year, active_flag
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    self.logged_in_patient_id,
-                    pm_type,
-                    last4,
-                    exp_month_db,
-                    exp_year_db,
-                    active_flag
-                ))
-
+                    INSERT INTO PaymentMethod (patient_id, type, last4, exp_month, exp_year, active_flag)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (self.selected_patient_id, pm_type, last4, int(exp_month), int(exp_year), active_flag))
                 self._db().commit()
             except sqlite3.Error as e:
                 messagebox.showerror("Database Error", f"Could not add payment method.\n\n{e}")
@@ -584,13 +637,8 @@ class BillingFrame(tk.Frame):
             messagebox.showinfo("Success", f"Payment method ending in {last4} added successfully.")
 
         tk.Button(
-            panel,
-            text="Save Payment Method",
-            bg=BG_SIDEBAR,
-            fg=TEXT,
-            font=FONT_BTN,
-            relief="flat",
-            command=save_payment_method
+            panel, text="Save Payment Method", bg=BG_SIDEBAR, fg=TEXT,
+            font=FONT_BTN, relief="flat", command=save_payment_method
         ).grid(row=6, column=0, columnspan=2, pady=16)
 
     def remove_payment_method(self):
@@ -601,11 +649,10 @@ class BillingFrame(tk.Frame):
 
         payment_method_id = self.payment_method_map[pm_label]
 
-        # Check if this payment method is used by any bills
         row = self._db().cursor().execute("""
             SELECT COUNT(*) FROM Bill
             WHERE payment_method_id = ? AND patient_id = ?
-        """, (payment_method_id, self.logged_in_patient_id)).fetchone()
+        """, (payment_method_id, self.selected_patient_id)).fetchone()
         used_count = row[0] if row else 0
 
         warning = ""
@@ -624,7 +671,7 @@ class BillingFrame(tk.Frame):
             self._db().execute("""
                 DELETE FROM PaymentMethod
                 WHERE payment_method_id = ? AND patient_id = ?
-            """, (payment_method_id, self.logged_in_patient_id))
+            """, (payment_method_id, self.selected_patient_id))
             self._db().commit()
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", f"Could not remove payment method.\n\n{e}")
@@ -659,10 +706,7 @@ class BillingFrame(tk.Frame):
         self._reconnect_db()
         self._db().execute("""
             UPDATE Bill
-            SET status = 'paid',
-                paid_date = ?,
-                payment_method_id = ?,
-                receipt_number = ?
+            SET status = 'paid', paid_date = ?, payment_method_id = ?, receipt_number = ?
             WHERE bill_id = ?
         """, (paid_date, payment_method_id, receipt_number, bill_id))
         self._db().commit()
@@ -682,16 +726,9 @@ class BillingFrame(tk.Frame):
         self._reconnect_db()
         row = self._db().cursor().execute("""
             SELECT
-                b.bill_id,
-                b.amount,
-                b.due_date,
-                b.status,
-                b.created_at,
-                b.paid_date,
+                b.bill_id, b.amount, b.due_date, b.status, b.created_at, b.paid_date,
                 COALESCE(b.receipt_number, ''),
-                p.first_name,
-                p.last_name,
-                p.email,
+                p.first_name, p.last_name, p.email,
                 COALESCE(cl.name, '') AS clinic_name,
                 COALESCE(pm.type, '') AS payment_type,
                 COALESCE(pm.last4, '') AS payment_last4
@@ -700,7 +737,7 @@ class BillingFrame(tk.Frame):
             LEFT JOIN ClinicLocation cl ON cl.location_id = b.location_id
             LEFT JOIN PaymentMethod pm ON pm.payment_method_id = b.payment_method_id
             WHERE b.bill_id = ? AND b.patient_id = ?
-        """, (bill_id, self.logged_in_patient_id)).fetchone()
+        """, (bill_id, self.selected_patient_id)).fetchone()
 
         if not row:
             messagebox.showerror("Not found", "Could not load that bill.")
