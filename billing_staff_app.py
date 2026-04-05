@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
+from PIL import Image, ImageTk
 import sqlite3
 import os
 import hashlib
@@ -126,6 +127,24 @@ class BillingFrame(tk.Frame):
             font=("Helvetica", 9, "bold"), justify="left", padx=8, pady=8
         ).pack(anchor="w")
 
+        # Load sidebar icons (same as clinic_location.py)
+        def load_icon(path, size=(18, 20)):
+            try:
+                img = Image.open(path).resize(size, Image.LANCZOS)
+                return ImageTk.PhotoImage(img)
+            except Exception:
+                return None
+
+        if not hasattr(self, "_sidebar_icons"):
+            self._sidebar_icons = {
+                "Dashboard": load_icon("icons/dashboard_icon.png"),
+                "Patient":   load_icon("icons/patient_icon.png"),
+                "Staff":     load_icon("icons/staff_icon.png"),
+                "Clinic":    load_icon("icons/clinic_icon.png"),
+                "Records":   load_icon("icons/folder_icon.png"),
+                "Billing":   load_icon("icons/credit_icon.png"),
+            }
+
         if self.role == "Staff":
             nav_map = {
                 "Dashboard": "HomePage",
@@ -145,6 +164,7 @@ class BillingFrame(tk.Frame):
         for item, page in nav_map.items():
             is_active = item == active_label
             bg = BG_SIDEBAR_LIGHT if is_active else BG_SIDEBAR
+            icon = self._sidebar_icons.get(item)
 
             def make_cmd(p=page):
                 if p and self.controller:
@@ -152,14 +172,15 @@ class BillingFrame(tk.Frame):
                 return None
 
             cmd = make_cmd()
+            kw = dict(image=icon, compound="left") if icon else {}
             if cmd:
                 tk.Button(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
                           anchor="w", padx=10, pady=6, relief="flat",
                           activebackground=BG_SIDEBAR_LIGHT, cursor="hand2",
-                          command=cmd).pack(fill="x", padx=10, pady=2)
+                          command=cmd, **kw).pack(fill="x", padx=10, pady=2)
             else:
                 tk.Label(sidebar, text=item, bg=bg, fg=TEXT, font=FONT_BODY,
-                         anchor="w", padx=10, pady=6).pack(fill="x", padx=10, pady=2)
+                         anchor="w", padx=10, pady=6, **kw).pack(fill="x", padx=10, pady=2)
 
         if self.controller:
             tk.Button(sidebar, text="← Dashboard", bg=BG_SIDEBAR, fg=TEXT,
